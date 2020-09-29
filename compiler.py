@@ -14,12 +14,8 @@ class Lexer:
         self.Token = namedtuple("Token", 'valid, type, row, symbol, value',
                                 defaults=(self.value,))
 
-    # @staticmethod
-    # def debug(msg):
-    #     print("DEBUG: Create node" + msg)
-
-    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, EOF = range(11)
-    SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON}
+    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EOF = range(13)
+    SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD}
     WORDS = {'int': INT, 'return': RETURN}
 
     def get(self):
@@ -63,7 +59,8 @@ class Lexer:
                 if k == 'int' and tmp_str.decode()[0] == '0':
                     self.tokens.append(self.Token(False, None, self.row, self.symbol - len(tmp_str)))
                 else:
-                    self.tokens.append(self.Token(True, Lexer.NUM, self.row, self.symbol - len(tmp_str), value=[tmp_str, k]))
+                    self.tokens.append(
+                        self.Token(True, Lexer.NUM, self.row, self.symbol - len(tmp_str), value=[tmp_str, k]))
             elif self.st.decode().isalpha():
                 ident = ''
                 while self.st.isalnum() or self.st.decode() == "_":
@@ -299,8 +296,9 @@ END main''']
 
 a = Lexer('lab1.c')
 a = a.next_token()
-p = Parser(a)
-ast = p.parse()
-com = Compile()
-com.compile(ast)
-com.printer()
+# p = Parser(a)
+# ast = p.parse()
+# com = Compile()
+# com.compile(ast)
+# com.printer()
+print(a)

@@ -1,3 +1,3 @@
-int main(){
+integer main(){
 return 43.22;
 }
