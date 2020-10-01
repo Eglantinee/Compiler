@@ -77,10 +77,11 @@ class Lexer:
 
 
 class Node:
-    def __init__(self, kind, value=None, name=None, op1=None):
+    def __init__(self, kind, value=None, name=None, op1=None, op2=None):
         self.kind = kind
         self.value = value
         self.op1 = op1
+        self.op2 = op2
         self.name = name
         self.type = type
 
@@ -104,7 +105,7 @@ class Parser:
     # def debug(msg):
     #     print("DEBUG: Create node" + msg)
 
-    VAR, CONST, RET, SEQ, FUNC, PROG = range(6)
+    VAR, CONST, RET, SEQ, FUNC, UNOP, BINOP, PROG = range(8)
     names = set()
     arrs = []
     stmts = {}
@@ -115,6 +116,7 @@ class Parser:
         sys.exit(1)
 
     def expr(self):
+        # n = self.expr()
         if self.token.type == Lexer.NUM:
             value, mtype = self.token.value
             tok_val = None
@@ -125,13 +127,15 @@ class Parser:
             elif mtype == 'hex':
                 tok_val = int(value, 16)
             n = Node(Parser.CONST, tok_val)
-            # self.debug("CONST")
             self.next_token()
+            return n
+        if self.token.type == Lexer.NOT:
+            self.next_token()
+            n = Node(Parser.UNOP, op1=self.expr())
             return n
         elif self.token.type == Lexer.ID:
             n = Node(Parser.VAR, self.token.type)
             self.next_token()
-            # self.debug("ID")
             return n
         else:
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
@@ -142,9 +146,19 @@ class Parser:
             n = Node(Parser.RET)
             self.next_token()
             n.op1 = self.expr()
+            print(n.op1.kind, self.token.type)
             if n.op1.kind == Parser.VAR:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg + " digit value expected")
+            elif self.token.type == Lexer.PROD:
+                self.next_token()
+                tmp = self.expr()
+                print("HERE")
+                print(tmp.kind)
+                if tmp.kind != Parser.UNOP and tmp.kind != Parser.CONST:
+                    self.error("Int expected")
+                else:
+                    n.op2 = tmp
             if self.token.type != Lexer.SEMICOLON:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg + " semicolon expected")
@@ -239,10 +253,12 @@ NumbToStr ENDP
 END main''']
 
     def iter_compile(self, lst):
+        print(lst[0].kind)
         for i in lst:
             self.compile(i)
 
     def compile(self, node):
+        print(node.kind)
         if node.kind == Parser.PROG:
             if isinstance(node.op1, Iterable):
                 self.iter_compile(node.op1)
@@ -296,9 +312,11 @@ END main''']
 
 a = Lexer('lab1.c')
 a = a.next_token()
-# p = Parser(a)
-# ast = p.parse()
-# com = Compile()
-# com.compile(ast)
-# com.printer()
-print(a)
+p = Parser(a)
+ast = p.parse()
+com = Compile()
+com.compile(ast)
+com.printer()
+# print(a)
+
+# print(ast.op1[0].op1.op1.kind)

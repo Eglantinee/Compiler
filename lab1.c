@@ -1,3 +1,3 @@
-integer main(){
-return 43.22;
+int main(){
+return 43.22 * !2;
 }
