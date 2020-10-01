@@ -56,7 +56,8 @@ class Lexer:
                     else:
                         break
                     self.get()
-                if k == 'int' and tmp_str.decode()[0] == '0':
+                if k == 'int' and tmp_str.decode()[0] == '0' and len(tmp_str.decode()) > 1:
+                    # sys.exit("IDK")
                     self.tokens.append(self.Token(False, None, self.row, self.symbol - len(tmp_str)))
                 else:
                     self.tokens.append(
@@ -105,9 +106,10 @@ class Parser:
     # def debug(msg):
     #     print("DEBUG: Create node" + msg)
 
-    VAR, CONST, RET, SEQ, FUNC, UNOP, BINOP, PROG = range(8)
+    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, FACTOR, TERM, PROG = range(10)
     names = set()
     arrs = []
+    terms = []
     stmts = {}
 
     @staticmethod
@@ -115,9 +117,42 @@ class Parser:
         print('Parser error:', msg)
         sys.exit(1)
 
-    def expr(self):
-        # n = self.expr()
-        if self.token.type == Lexer.NUM:
+    def factor(self):
+        if self.token.type == Lexer.LPAR:
+            n = Node(Parser.EXPR)
+            self.next_token()
+            tmp = self.factor()
+            if tmp is not None:
+                n.op1 = tmp
+            else:
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                self.error(msg)
+            self.next_token()
+            if self.token.type != Lexer.RPAR:
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                self.error(msg)
+            return n
+        elif self.token.type == Lexer.NOT:
+            n = Node(Parser.UNOP)
+            k = 1
+            while True:
+                self.next_token()
+                if self.token.type == Lexer.NOT:
+                    k += 1
+                    continue
+                else:
+                    break
+
+            if self.token.type == Lexer.NUM:
+                if k % 2 != 0:
+                    n.value = self.factor().value
+                else:
+                    n.value = 0 if self.factor().value != 0 else 1
+            else:
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                self.error(msg)
+            return n
+        elif self.token.type == Lexer.NUM:
             value, mtype = self.token.value
             tok_val = None
             if mtype == "int":
@@ -127,36 +162,79 @@ class Parser:
             elif mtype == 'hex':
                 tok_val = int(value, 16)
             n = Node(Parser.CONST, tok_val)
-            self.next_token()
             return n
-        if self.token.type == Lexer.NOT:
+        else:
+            print(self.token.type)
+            msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+            self.error(msg)
+
+    def term(self):
+        n = Node(Parser.TERM)
+        self.terms.append(self.factor())
+        self.next_token()
+        if self.token.type == Lexer.PROD:
+            n.kind = Parser.BINOP
             self.next_token()
-            n = Node(Parser.UNOP, op1=self.expr())
-            return n
-        elif self.token.type == Lexer.ID:
-            n = Node(Parser.VAR, self.token.type)
-            self.next_token()
+            while True:
+                self.terms.append(self.factor())
+                self.next_token()
+                if self.token.type != Lexer.PROD and self.token.type != Lexer.SEMICOLON:
+                    msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                    self.error(msg)
+                if self.token.type == Lexer.SEMICOLON:
+                    n.op1 = self.terms
+                    return n
+                self.next_token()
+        elif self.token.type == Lexer.SEMICOLON:
+            n.op1 = self.terms
             return n
         else:
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
+
+    def expr(self):
+        return self.term()
+
+    #
+    # def expr(self):
+    #     if self.token.type == Lexer.NUM:
+    #         value, mtype = self.token.value
+    #         tok_val = None
+    #         if mtype == "int":
+    #             tok_val = int(value)
+    #         elif mtype == 'float':
+    #             tok_val = int(float(value))
+    #         elif mtype == 'hex':
+    #             tok_val = int(value, 16)
+    #         n = Node(Parser.CONST, tok_val)
+    #         self.next_token()
+    #         return n
+    #     if self.token.type == Lexer.NOT:
+    #         self.next_token()
+    #         n = Node(Parser.UNOP, op1=self.expr())
+    #         return n
+    #     elif self.token.type == Lexer.ID:
+    #         n = Node(Parser.VAR, self.token.type)
+    #         self.next_token()
+    #         return n
+    #     else:
+    #         msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+    #         self.error(msg)
 
     def statement(self):
         if self.token.type == Lexer.RETURN:
             n = Node(Parser.RET)
             self.next_token()
             n.op1 = self.expr()
-            print(n.op1.kind, self.token.type)
             if n.op1.kind == Parser.VAR:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg + " digit value expected")
             elif self.token.type == Lexer.PROD:
                 self.next_token()
                 tmp = self.expr()
-                print("HERE")
-                print(tmp.kind)
                 if tmp.kind != Parser.UNOP and tmp.kind != Parser.CONST:
-                    self.error("Int expected")
+                    msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                    self.error(msg)
                 else:
                     n.op2 = tmp
             if self.token.type != Lexer.SEMICOLON:
@@ -169,7 +247,6 @@ class Parser:
                 n = self.stmts['return']
             return n
         else:
-            print(self.token)
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
 
@@ -218,13 +295,15 @@ class Parser:
 
 class Compile:
     def __init__(self):
+        print("\n")
         self.program = []
         self.flag = False
         self.name = None
+        self.registers = ['eax']
 
-    HEAD = ['.386\n', '.model flat,stdcall\n', 'option casemap:none\n', 'include     E:\masm32\include\windows.inc\n',
-            'include     E:\masm32\include\kernel32.inc\n', 'include     E:\masm32\include\masm32.inc\n',
-            'includelib    E:\masm32\lib\kernel32.lib\n', 'includelib    E:\masm32\lib\masm32.lib\n',
+    HEAD = ['.386\n', '.model flat,stdcall\n', 'option casemap:none\n', 'include     D:\masm32\include\windows.inc\n',
+            'include     D:\masm32\include\kernel32.inc\n', 'include     D:\masm32\include\masm32.inc\n',
+            'includelib    D:\masm32\lib\kernel32.lib\n', 'includelib    D:\masm32\lib\masm32.lib\n',
             'NumbToStr    PROTO: DWORD,:DWORD\n']
 
     DATA = ['.data\n', 'buff        db 11 dup(?)\n']
@@ -253,12 +332,10 @@ NumbToStr ENDP
 END main''']
 
     def iter_compile(self, lst):
-        print(lst[0].kind)
         for i in lst:
             self.compile(i)
 
     def compile(self, node):
-        print(node.kind)
         if node.kind == Parser.PROG:
             if isinstance(node.op1, Iterable):
                 self.iter_compile(node.op1)
@@ -277,26 +354,47 @@ END main''']
                 self.compile(node.op1)
                 self.CALLS.append(self.name + ' endp\n')
 
+        if node.kind == Parser.TERM:
+            self.CODE.append('mov eax, ')
+            self.compile(node.op1[0])
+        elif node.kind == Parser.BINOP:
+            ln = len(node.op1)
+            self.CODE.append('mov eax, ')
+            self.registers[0] = "eax"
+            self.compile(node.op1[ln - 1])
+            self.registers[0] = "ecx"
+            ln -= 1
+            while ln > 0:
+                self.CODE.append('mov ecx, ')
+                self.compile(node.op1[ln - 1])
+                self.CODE.append('mul ecx\n')
+                ln -= 1
+
+        elif node.kind == Parser.UNOP:
+            self.CODE.append(str(node.value) + '\n')
+            self.CODE.append("cmp " + self.registers[0] + ", 0\n sete " + self.registers[0][1] + "l\n")
+
         if node.kind == Parser.CONST:
             if self.name != 'main':
                 self.CALLS.append(str(node.value) + '\n')
             else:
                 self.CODE.append(str(node.value) + '\n')
 
-        if node.kind == Parser.SEQ:
+        if node.kind == Parser.EXPR:
             self.compile(node.op1)
 
         if node.kind == Parser.RET:
             if self.name == "main":
-                self.CODE.append("    mov ebx, ")
+                self.CODE.append("xor eax, eax\n xor ebx, ebx\n xor ecx, ecx\n")
                 self.compile(node.op1)
+                self.CODE.append("mov ebx, eax\n")
             else:
                 self.CALLS.append('    mov ebx, ')
                 self.compile(node.op1)
                 self.CALLS.append("    ret\n")
 
     def printer(self):
-        f = open('output.asm', 'w')
+        f = open('2-27-Python-IV-82-Shkardybarda', 'w')
         self.CODE.extend(self.CALLS)
         self.program += self.HEAD
         self.program += self.DATA
@@ -310,7 +408,7 @@ END main''']
         return self.program
 
 
-a = Lexer('lab1.c')
+a = Lexer('2-27-Python-IV-82-Shkardybarda.txt')
 a = a.next_token()
 p = Parser(a)
 ast = p.parse()
@@ -320,3 +418,4 @@ com.printer()
 # print(a)
 
 # print(ast.op1[0].op1.op1.kind)
+# print(ast)

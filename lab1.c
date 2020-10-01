@@ -1,3 +1,3 @@
 int main(){
-return 43.22 * !2;
+return !!0 * 2*4;
 }
