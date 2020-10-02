@@ -144,6 +144,8 @@ class Parser:
                     n.value = self.factor().value
                 else:
                     n.value = 0 if self.factor().value != 0 else 1
+            elif self.token.type == Lexer.LPAR:
+                n.op1 = self.factor()
             else:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
@@ -375,9 +377,9 @@ a = Lexer('lab1.c')
 a = a.next_token()
 p = Parser(a)
 ast = p.parse()
-com = Compile()
-com.compile(ast)
-com.printer()
+# com = Compile()
+# com.compile(ast)
+# com.printer()
 # print(a)
 
 # print(ast.op1[0].op1.op1.kind)
