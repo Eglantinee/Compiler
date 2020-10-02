@@ -14,13 +14,7 @@ main:
 xor eax, eax
  xor ebx, ebx
  xor ecx, ecx
-mov eax, 4
-mov ecx, 2
-mul ecx
-mov ecx, 1
-cmp ecx, 0
- sete cl
-mul ecx
+mov eax, 2
 mov ebx, eax
 invoke  NumbToStr, ebx, ADDR buff
 invoke  StdOut,eax

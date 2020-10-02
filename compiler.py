@@ -1,7 +1,13 @@
 import sys
+import inspect
 from collections import namedtuple
 from collections.abc import Iterable
 
+
+def debug(token):
+    print(token)
+    lxr = ('NUM', 'ID', 'INT', 'FLOAT', 'LBRA', 'RBRA', 'RETURN', 'LPAR', 'RPAR', 'SEMICOLON', 'NOT', 'PROD', 'EOF')
+    print("tok type = " + lxr[token.type])
 
 class Lexer:
     def __init__(self, file):
@@ -98,13 +104,8 @@ class Parser:
             if self.token.valid is False:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg + " invalid value")
-
         else:
             self.token = None
-
-    # @staticmethod
-    # def debug(msg):
-    #     print("DEBUG: Create node" + msg)
 
     VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, FACTOR, TERM, PROG = range(10)
     names = set()
@@ -118,16 +119,11 @@ class Parser:
         sys.exit(1)
 
     def factor(self):
+        print("Enter factor", inspect.currentframe().f_back)
         if self.token.type == Lexer.LPAR:
             n = Node(Parser.EXPR)
             self.next_token()
-            tmp = self.factor()
-            if tmp is not None:
-                n.op1 = tmp
-            else:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                self.error(msg)
-            self.next_token()
+            n.op1 = self.term()
             if self.token.type != Lexer.RPAR:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
@@ -142,7 +138,7 @@ class Parser:
                     continue
                 else:
                     break
-
+# todo ability to find brackets
             if self.token.type == Lexer.NUM:
                 if k % 2 != 0:
                     n.value = self.factor().value
@@ -153,6 +149,7 @@ class Parser:
                 self.error(msg)
             return n
         elif self.token.type == Lexer.NUM:
+            print("ENTER EXPECTED")
             value, mtype = self.token.value
             tok_val = None
             if mtype == "int":
@@ -162,9 +159,10 @@ class Parser:
             elif mtype == 'hex':
                 tok_val = int(value, 16)
             n = Node(Parser.CONST, tok_val)
+            print("Return ", tok_val)
             return n
         else:
-            print(self.token.type)
+            debug(self.token)
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
 
@@ -172,54 +170,19 @@ class Parser:
         n = Node(Parser.TERM)
         self.terms.append(self.factor())
         self.next_token()
-        if self.token.type == Lexer.PROD:
-            n.kind = Parser.BINOP
-            self.next_token()
-            while True:
+        while True:
+            if self.token.type == Lexer.PROD:
+                self.next_token()
                 self.terms.append(self.factor())
                 self.next_token()
-                if self.token.type != Lexer.PROD and self.token.type != Lexer.SEMICOLON:
-                    msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                    self.error(msg)
-                if self.token.type == Lexer.SEMICOLON:
-                    n.op1 = self.terms
-                    return n
-                self.next_token()
-        elif self.token.type == Lexer.SEMICOLON:
-            n.op1 = self.terms
-            return n
-        else:
-            msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-            self.error(msg)
+            else:
+                n.op1 = self.terms
+                self.terms.clear()
+                break
+        return n
 
     def expr(self):
         return self.term()
-
-    #
-    # def expr(self):
-    #     if self.token.type == Lexer.NUM:
-    #         value, mtype = self.token.value
-    #         tok_val = None
-    #         if mtype == "int":
-    #             tok_val = int(value)
-    #         elif mtype == 'float':
-    #             tok_val = int(float(value))
-    #         elif mtype == 'hex':
-    #             tok_val = int(value, 16)
-    #         n = Node(Parser.CONST, tok_val)
-    #         self.next_token()
-    #         return n
-    #     if self.token.type == Lexer.NOT:
-    #         self.next_token()
-    #         n = Node(Parser.UNOP, op1=self.expr())
-    #         return n
-    #     elif self.token.type == Lexer.ID:
-    #         n = Node(Parser.VAR, self.token.type)
-    #         self.next_token()
-    #         return n
-    #     else:
-    #         msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-    #         self.error(msg)
 
     def statement(self):
         if self.token.type == Lexer.RETURN:
@@ -394,7 +357,7 @@ END main''']
                 self.CALLS.append("    ret\n")
 
     def printer(self):
-        f = open('2-27-Python-IV-82-Shkardybarda', 'w')
+        f = open('output.asm', 'w')
         self.CODE.extend(self.CALLS)
         self.program += self.HEAD
         self.program += self.DATA
@@ -408,7 +371,7 @@ END main''']
         return self.program
 
 
-a = Lexer('2-27-Python-IV-82-Shkardybarda.txt')
+a = Lexer('lab1.c')
 a = a.next_token()
 p = Parser(a)
 ast = p.parse()
