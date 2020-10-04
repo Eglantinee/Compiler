@@ -9,6 +9,7 @@ def debug(token):
     lxr = ('NUM', 'ID', 'INT', 'FLOAT', 'LBRA', 'RBRA', 'RETURN', 'LPAR', 'RPAR', 'SEMICOLON', 'NOT', 'PROD', 'EOF')
     print("tok type = " + lxr[token.type])
 
+
 class Lexer:
     def __init__(self, file):
         self.file = open(file, 'rb')
@@ -125,6 +126,7 @@ class Parser:
             self.next_token()
             n.op1 = self.term()
             if self.token.type != Lexer.RPAR:
+                debug(self.token)
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
             return n
@@ -138,20 +140,9 @@ class Parser:
                     continue
                 else:
                     break
-# todo ability to find brackets
-            if self.token.type == Lexer.NUM:
-                if k % 2 != 0:
-                    n.value = self.factor().value
-                else:
-                    n.value = 0 if self.factor().value != 0 else 1
-            elif self.token.type == Lexer.LPAR:
-                n.op1 = self.factor()
-            else:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                self.error(msg)
+            n.op1 = self.factor()
             return n
         elif self.token.type == Lexer.NUM:
-            print("ENTER EXPECTED")
             value, mtype = self.token.value
             tok_val = None
             if mtype == "int":
@@ -161,7 +152,6 @@ class Parser:
             elif mtype == 'hex':
                 tok_val = int(value, 16)
             n = Node(Parser.CONST, tok_val)
-            print("Return ", tok_val)
             return n
         else:
             debug(self.token)
@@ -169,19 +159,32 @@ class Parser:
             self.error(msg)
 
     def term(self):
-        n = Node(Parser.TERM)
-        self.terms.append(self.factor())
+        print("Enter term", inspect.currentframe().f_back)
+        elem = self.factor()
         self.next_token()
-        while True:
-            if self.token.type == Lexer.PROD:
-                self.next_token()
-                self.terms.append(self.factor())
-                self.next_token()
-            else:
-                n.op1 = self.terms
-                self.terms.clear()
-                break
-        return n
+        if self.token.type == Lexer.PROD:
+            current_op = [elem]
+            n = Node(Parser.BINOP)
+            self.next_token()
+            current_op.append(self.factor())
+            self.next_token()
+            while True:
+                if self.token.type == Lexer.PROD:
+                    self.next_token()
+                    current_op.append(self.factor())
+                    self.next_token()
+                else:
+                    break
+            self.terms.append(current_op)
+            n.op1 = current_op.copy()
+            print(self.terms)
+            return n
+        return elem
+        # elif len(self.terms) == 1:
+        #     return self.terms[0]
+        # else:
+        #     n = Node(Parser.TERM, op1=self.terms)
+        #     return n
 
     def expr(self):
         return self.term()
@@ -372,11 +375,11 @@ END main''']
     def rest(self):
         return self.program
 
+# a = Lexer('lab1.c')
+# a = a.next_token()
+# p = Parser(a)
+# ast = p.parse()
 
-a = Lexer('lab1.c')
-a = a.next_token()
-p = Parser(a)
-ast = p.parse()
 # com = Compile()
 # com.compile(ast)
 # com.printer()
