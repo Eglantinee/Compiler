@@ -21,8 +21,9 @@ class Lexer:
         self.Token = namedtuple("Token", 'valid, type, row, symbol, value',
                                 defaults=(self.value,))
 
-    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EOF = range(13)
-    SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD}
+    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF = range(16)
+    SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
+               "/": DIV}
     WORDS = {'int': INT, 'return': RETURN}
 
     def get(self):
@@ -108,7 +109,7 @@ class Parser:
         else:
             self.token = None
 
-    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, FACTOR, TERM, PROG = range(10)
+    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, FACTOR, TERM, DECL, STMT, ID, PROG = range(13)
     names = set()
     arrs = []
     terms = []
@@ -153,6 +154,8 @@ class Parser:
                 tok_val = int(value, 16)
             n = Node(Parser.CONST, tok_val)
             return n
+        elif self.token.type == Lexer.ID:
+            return Node(Parser.ID, value=self.token.value)
         else:
             debug(self.token)
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
@@ -187,9 +190,15 @@ class Parser:
         #     return n
 
     def expr(self):
-        return self.term()
+        if self.token.type == Lexer.ID:
+            self.next_token()
+            if self.token.type == Lexer.EQUAL:
+                return Node(Parser.EXPR, op1=self.expr())
+        else:
+            return self.term()
 
     def statement(self):
+        # IT SEEMS TO BE BROKEN AS I SHOULD JUST CALL EXPRESSION AND PARSE RESULT!
         if self.token.type == Lexer.RETURN:
             n = Node(Parser.RET)
             self.next_token()
@@ -214,9 +223,22 @@ class Parser:
             else:
                 n = self.stmts['return']
             return n
+        elif self.token.type == Lexer.INT:
+            self.next_token()
+            if self.token.type == Lexer.ID:
+                name = self.token.value
+                self.next_token()
+                if self.token.type == Lexer.EQUAL:
+                    return Node(Parser.DECL, op1=self.expr())
+                elif self.token.type == Lexer.SEMICOLON:
+                    return Node(Parser.DECL, name=name)
+                else:
+                    msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                    self.error(msg)
         else:
-            msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-            self.error(msg)
+            return Node(Parser.STMT, op1=self.expr())
+            # msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+            # self.error(msg)
 
     def function(self):
         if self.token.type == Lexer.INT:
