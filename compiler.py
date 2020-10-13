@@ -190,6 +190,7 @@ class Parser:
         #     return n
 
     def expr(self):
+        print("DEBUG: enter EXPRESSION")
         if self.token.type == Lexer.ID:
             self.next_token()
             if self.token.type == Lexer.EQUAL:
@@ -198,6 +199,7 @@ class Parser:
             return self.term()
 
     def statement(self):
+        print("DEBUG: enter STATEMENT")
         # IT SEEMS TO BE BROKEN AS I SHOULD JUST CALL EXPRESSION AND PARSE RESULT!
         if self.token.type == Lexer.RETURN:
             n = Node(Parser.RET)
@@ -241,6 +243,7 @@ class Parser:
             # self.error(msg)
 
     def function(self):
+        print("DEBUG: enter FUNCTION")
         if self.token.type == Lexer.INT:
             self.next_token()
             if self.token.type == Lexer.ID:
