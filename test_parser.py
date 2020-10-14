@@ -1,24 +1,17 @@
 from compiler import Lexer, Parser
 from collections.abc import Iterable
 
-nodes = ['VAR', 'CONST', 'RET', 'EXPR', 'FUNC', 'UNOP', 'BINOP', 'FACTOR', 'TERM',  'DECL', 'STMT', 'ID', 'PROG']
+nodes = ['VAR', 'CONST', 'RET', 'EXPR', 'FUNC', 'UNOP', 'BINOP', 'FACTOR', 'TERM', 'DECL', 'STMT', 'ID', 'PROG']
 
 file = 'lab1.c'
 lex = Lexer(file)
 lexems = lex.next_token()
-# pars = Parser(lexems)
-# ast = pars.parse()
+pars = Parser(lexems)
+ast = pars.parse()
 
 print("#" * 30)
 for i in lexems:
     print(i)
-
-# def iter_prt(ast):
-#     if ast is None:
-#         return
-#     print(ast.kind)
-#     iter_prt(ast.op1)
-
 
 
 def tree_ast(ast, n):
@@ -36,5 +29,4 @@ def tree_ast(ast, n):
         tree_ast(ast.op1, n + 1)
 
 
-# tree_ast(ast, 1)
-
+tree_ast(ast, 1)

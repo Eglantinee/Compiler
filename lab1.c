@@ -1,4 +1,6 @@
 int main(){
-int abrakadabra/abrakadabra;
-return (!3);
+int a = 10;
+a = a ^ a / 5 * 25 * a * !a;
+a = !5;
+return a;
 }
