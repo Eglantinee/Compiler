@@ -3,6 +3,7 @@ import inspect
 from collections import namedtuple
 from collections.abc import Iterable
 
+
 #   DECLARATION -- CALLER SHOULD GEN TEXT TOKEN!!!!
 
 def debug(token):
@@ -111,7 +112,7 @@ class Parser:
         else:
             self.token = None
 
-    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, FACTOR, TERM, DECL, STMT, ID, PROG = range(13)
+    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, PROG = range(16)
     names = set()
     arrs = []
     terms = []
@@ -158,10 +159,10 @@ class Parser:
             n = Node(Parser.CONST, tok_val)
             return n
         elif self.token.type == Lexer.ID:
-            if self.token.value not in self.var_map:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                msg += "Undeclared variable"
-                self.error(msg)
+            # if self.token.value not in self.var_map:
+            #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+            #     msg += "Undeclared variable"
+            #     self.error(msg)
             return Node(Parser.ID, value=self.token.value)
         else:
             debug(self.token)
@@ -169,30 +170,67 @@ class Parser:
             self.error(msg)
 
     def term(self):
-        print(self.token)
-        print("Enter term", inspect.currentframe().f_back)
+        # print(self.token)
+        # print("Enter term", inspect.currentframe().f_back)
         elem = self.factor()
-        print("/////////", self.token)
+        # print("/////////", self.token)
         self.next_token()
-        print("**************")
-        print(self.token)
+        # print("**************")
+        # print(self.token)
         if self.token.type == Lexer.PROD or self.token.type == Lexer.DIV or self.token.type == Lexer.XOR:
-            current_op = [elem]
+            op = self.token.type
+            # current_op = [elem]
+            current_op = []
             n = Node(Parser.BINOP)
+            daughter = None
+            if self.token.type == Lexer.PROD:
+                daughter = Node(Parser.BIN_PROD, op1=[])
+            elif self.token.type == Lexer.DIV:
+                daughter = Node(Parser.BIN_DIV, op1=[])
+            else:
+                daughter = Node(Parser.BIN_XOR, op1=[])
+            daughter.op1.append(elem)
             self.next_token()
-            current_op.append(self.factor())
+            daughter.op1.append(self.factor())
+            # current_op.append(self.factor())
             self.next_token()
             while True:
-                if self.token.type == Lexer.PROD or self.token.type == Lexer.DIV or self.token.type == Lexer.XOR:
+                if self.token.type == op:
                     self.next_token()
-                    current_op.append(self.factor())
+                    daughter.op1.append(self.factor())
                     self.next_token()
+                    continue
+                elif self.token.type == Lexer.PROD:
+                    op = Lexer.PROD
+                    daughter = Node(Parser.BIN_PROD, op1=[daughter])
+                    self.next_token()
+                    daughter.op1.append(self.factor())
+                    self.next_token()
+                    continue
+                elif self.token.type == Lexer.DIV:
+                    op = Lexer.DIV
+                    daughter = Node(Parser.BIN_DIV, op1=[daughter])
+                    self.next_token()
+                    daughter.op1.append(self.factor())
+                    self.next_token()
+                    continue
+                elif self.token.type == Lexer.XOR:
+                    op = Lexer.XOR
+                    daughter = Node(Parser.BIN_XOR, op1=[daughter])
+                    self.next_token()
+                    daughter.op1.append(self.factor())
+                    self.next_token()
+                    continue
                 else:
                     break
-            self.terms.append(current_op)
-            n.op1 = current_op.copy()
-            print(self.terms)
+            # self.terms.append(current_op)
+            n.op1 = daughter
+            # print(self.terms)
             return n
+        # elif self.token.type == Lexer.DIV:
+        #     daughter = Node(Lexer.DIV, op1=[])
+        #     while True:
+
         return elem
 
     def expr(self):
@@ -240,32 +278,26 @@ class Parser:
         elif self.token.type == Lexer.INT:
             self.next_token()
             if self.token.type == Lexer.ID:
-                name = self.token.value
+                tok_id = self.factor()  # It should return Node with var name
                 self.next_token()
                 if self.token.type == Lexer.EQUAL:
-                    if name not in self.var_map:
-                        self.var_map.add(name)
-                    else:
-                        msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                        msg += "Undeclared variable"
-                        self.error(msg)
                     self.next_token()
-                    return Node(Parser.DECL, op1=self.expr())
+                    return Node(Parser.DECL, op1=tok_id, op2=self.expr())
                 elif self.token.type == Lexer.SEMICOLON:
-                    if self.token.value not in self.var_map:
-                        self.var_map.add(self.token.value)
-                    else:
-                        msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                        msg += "Undeclared variable"
-                        self.error(msg)
-                    return Node(Parser.DECL, name=name)
+                    # if self.token.value not in self.var_map:
+                    #     self.var_map.add(self.token.value)
+                    # else:
+                    #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                    #     msg += "Undeclared variable"
+                    #     self.error(msg)
+                    return Node(Parser.DECL, op1=tok_id)
                 else:
                     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                     self.error(msg)
-        elif self.token.type == Lexer.ID and self.token.value not in self.var_map:
-            msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-            msg += "Undeclared variable"
-            self.error(msg)
+        # elif self.token.type == Lexer.ID and self.token.value not in self.var_map:
+        #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+        #     msg += "Undeclared variable"
+        #     self.error(msg)
         else:
             return self.expr()
 
@@ -275,9 +307,9 @@ class Parser:
             self.next_token()
             if self.token.type == Lexer.ID:
                 name = self.token.value
-                if name in self.names:  # This means we have the same functions name
-                    msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                    self.error(msg + " bad identifier")
+                # if name in self.names:  # This means we have the same functions name
+                #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                #     self.error(msg + " bad identifier")
                 self.names.add(name)
                 self.next_token()
                 if self.token.type == Lexer.LPAR:
@@ -327,6 +359,8 @@ class Compile:
         self.flag = False
         self.name = None
         self.registers = ['eax']
+        self.var_map = {}
+        self.counter = 0
 
     HEAD = ['.386\n', '.model flat,stdcall\n', 'option casemap:none\n', 'include     D:\masm32\include\windows.inc\n',
             'include     D:\masm32\include\kernel32.inc\n', 'include     D:\masm32\include\masm32.inc\n',
@@ -335,7 +369,7 @@ class Compile:
 
     DATA = ['.data\n', 'buff        db 11 dup(?)\n']
 
-    CODE = ['.code\n', 'main:\n']
+    CODE = ['.code\n', 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n"]
 
     CALLS = ['invoke  NumbToStr, ebx, ADDR buff\n', 'invoke  StdOut,eax\n', 'invoke  ExitProcess, 0\n']
 
@@ -363,6 +397,22 @@ END main''']
             self.compile(i)
 
     def compile(self, node):
+        def define(elem):
+            if elem.kind == Parser.CONST:
+                return str(elem.value)
+            else:
+                return str('[ebp - {}]'.format(elem.value))
+
+        if node.kind == Parser.DECL:
+            self.CODE.append("\tsub esp, 4\n")
+            self.counter += 4
+            self.compile(node.op1)
+            if node.op2:
+                self.compile(node.op2)
+                self.CODE.append("\tmov dword ptr [ebp - {}], current register\n".format(self.counter))
+        elif node.kind == Parser.ID:
+            self.var_map.update({node.value: self.counter})
+
         if node.kind == Parser.PROG:
             if isinstance(node.op1, Iterable):
                 self.iter_compile(node.op1)
@@ -372,7 +422,11 @@ END main''']
         elif node.kind == Parser.FUNC:
             self.name = node.name
             if self.name == "main":
-                self.compile(node.op1)
+                if isinstance(node.op1, Iterable):
+                    self.iter_compile(node.op1)
+                else:
+                    self.compile(node.op1)
+
             else:
                 self.name = 'my_' + self.name
                 self.HEAD.append(self.name + '\t')
@@ -382,24 +436,54 @@ END main''']
                 self.CALLS.append(self.name + ' endp\n')
 
         if node.kind == Parser.TERM:
-            self.CODE.append('mov eax, ')
+            self.CODE.append('\tmov eax, ')
             self.compile(node.op1[0])
         elif node.kind == Parser.BINOP:
-            ln = len(node.op1)
-            self.CODE.append('mov eax, ')
-            self.registers[0] = "eax"
-            self.compile(node.op1[ln - 1])
-            self.registers[0] = "ecx"
-            ln -= 1
-            while ln > 0:
-                self.CODE.append('mov ecx, ')
-                self.compile(node.op1[ln - 1])
-                self.CODE.append('mul ecx\n')
-                ln -= 1
+            self.compile(node.op1)
 
+        elif node.kind == Parser.BIN_PROD:
+            if node.op1[0].kind not in [Parser.BIN_XOR, Parser.BIN_DIV]:
+                self.CODE.append("\tmov eax, {}\n".format(define(node.op1[0])))
+                for i in range(1, len(node.op1) - 1):
+                    self.CODE.append('\tmov ecx, {}\n\tmul ecx\n'.format(define(node.op1[i])))
+                self.CODE.append('\tpush eax\n')
+            else:
+                self.compile(node.op1[0])
+                self.CODE.append("\tpop eax\n")
+                for i in node.op1[1:]:
+                    self.CODE.append('\tmov ecx, {}\n'.format(define(i)))
+                    self.CODE.append('\tmul ecx\n')
+
+        elif node.kind == Parser.BIN_DIV:
+            if node.op1[0].kind not in [Parser.BIN_XOR, Parser.BIN_PROD]:
+                self.CODE.append("\tmov eax, {}\n".format(define(node.op1[0])))
+                for i in node.op1[1:]:
+                    self.CODE.append('\tmov ecx, {}\ndiv ecx\n\tcdq\n'.format(define(i)))
+                self.CODE.append('\tpush eax\n')
+            else:
+                self.compile(node.op1[0])
+                self.CODE.append("\tpop eax\n")
+                for i in node.op1[1:]:
+                    self.CODE.append('\tmov ecx, {}\n'.format(define(i)))
+                    self.CODE.append('\tdiv ecx\n\tcdq\n')
+                self.CODE.append("\tpush eax\n")
+
+        elif node.kind == Parser.BIN_XOR:
+            if node.op1[0].kind not in [Parser.BIN_PROD, Parser.BIN_DIV]:
+                self.CODE.append("\tmov eax, {}\n".format(define(node.op1[0])))
+                for i in node.op1[1:]:
+                    self.CODE.append('\tmov ecx, {}\nxor eax, ecx\n'.format(define(i)))
+                self.CODE.append('\tpush eax\n')
+            else:
+                self.compile(node.op1[0])
+                self.CODE.append("\tpop eax\n")
+                for i in node.op1[1:]:
+                    self.CODE.append('\tmov ecx, {}\n'.format(define(i)))
+                    self.CODE.append('\txor eax, ecx\n')
+                self.CODE.append('\tpush eax\n')
         elif node.kind == Parser.UNOP:
             self.CODE.append(str(node.value) + '\n')
-            self.CODE.append("cmp " + self.registers[0] + ", 0\n sete " + self.registers[0][1] + "l\n")
+            self.CODE.append("\tcmp " + self.registers[0] + ", 0\n sete " + self.registers[0][1] + "l\n")
 
         if node.kind == Parser.CONST:
             if self.name != 'main':
@@ -412,19 +496,18 @@ END main''']
 
         if node.kind == Parser.RET:
             if self.name == "main":
-                self.CODE.append("xor eax, eax\n xor ebx, ebx\n xor ecx, ecx\n")
                 self.compile(node.op1)
-                self.CODE.append("mov ebx, eax\n")
+                self.CODE.append("\tmov ebx, eax\n")
             else:
-                self.CALLS.append('    mov ebx, ')
+                self.CALLS.append('\tmov ebx, ')
                 self.compile(node.op1)
-                self.CALLS.append("    ret\n")
+                self.CALLS.append("\tret\n")
 
     def printer(self):
         f = open('output.asm', 'w')
         self.CODE.extend(self.CALLS)
         self.program += self.HEAD
-        self.program += self.DATA
+        # self.program += self.DATA
         self.program += self.CODE
         self.program += self.END
         for i in self.program:
@@ -438,11 +521,13 @@ END main''']
 # a = a.next_token()
 # p = Parser(a)
 # ast = p.parse()
-
+#
 # com = Compile()
 # com.compile(ast)
 # com.printer()
-# print(a)
 
-# print(ast.op1[0].op1.op1.kind)
-# print(ast)
+# TODO
+#   1) Continue working with code generator it is nearly good but still far (xor don't work and other
+#   operations should be checked)
+#   2) Parser is really good but it should have other level for XOR operation
+#   3) In code generator variable map isn't used it should be fixed

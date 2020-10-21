@@ -1,6 +1,5 @@
 int main(){
 int a = 10;
-a = a ^ a / 5 * 25 * a * !a;
-a = !5;
+a = a * 5 * 22 / a ^ 5 * 25;
 return a;
 }
