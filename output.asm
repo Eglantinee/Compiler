@@ -7,15 +7,31 @@ include     D:\masm32\include\masm32.inc
 includelib    D:\masm32\lib\kernel32.lib
 includelib    D:\masm32\lib\masm32.lib
 NumbToStr    PROTO: DWORD,:DWORD
-.data
-buff        db 11 dup(?)
 .code
 main:
-xor eax, eax
- xor ebx, ebx
- xor ecx, ecx
-mov eax, 2
-mov ebx, eax
+	xor eax, eax
+	xor ebx, ebx
+	xor ecx, ecx
+	sub esp, 4
+10
+	mov dword ptr [ebp - 4], current register
+	mov eax, [ebp - a]
+	mov ecx, 5
+	mul ecx
+	push eax
+	pop eax
+	mov ecx, [ebp - a]
+	div ecx
+	cdq
+	push eax
+	pop eax
+	mov ecx, 5
+	xor eax, ecx
+	push eax
+	pop eax
+	mov ecx, 25
+	mul ecx
+	mov ebx, eax
 invoke  NumbToStr, ebx, ADDR buff
 invoke  StdOut,eax
 invoke  ExitProcess, 0
