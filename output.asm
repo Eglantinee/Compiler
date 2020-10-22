@@ -13,14 +13,15 @@ main:
 	xor ebx, ebx
 	xor ecx, ecx
 	sub esp, 4
-10
-	mov dword ptr [ebp - 4], current register
-	mov eax, [ebp - a]
+	push eax, 10
+	pop eax
+	mov dword ptr [ebp - 4], eax
+	mov eax, [ebp - 4]
 	mov ecx, 5
 	mul ecx
 	push eax
 	pop eax
-	mov ecx, [ebp - a]
+	mov ecx, [ebp - 4]
 	div ecx
 	cdq
 	push eax

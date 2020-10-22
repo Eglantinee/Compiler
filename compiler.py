@@ -399,9 +399,11 @@ END main''']
     def compile(self, node):
         def define(elem):
             if elem.kind == Parser.CONST:
+                # self.compile(elem)
                 return str(elem.value)
             else:
-                return str('[ebp - {}]'.format(elem.value))
+                self.compile(elem)
+                return str('[ebp - {}]'.format(self.var_map[elem.value]))
 
         if node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
@@ -409,7 +411,8 @@ END main''']
             self.compile(node.op1)
             if node.op2:
                 self.compile(node.op2)
-                self.CODE.append("\tmov dword ptr [ebp - {}], current register\n".format(self.counter))
+                self.CODE.append("\tpop eax\n")
+                self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
         elif node.kind == Parser.ID:
             self.var_map.update({node.value: self.counter})
 
@@ -487,9 +490,9 @@ END main''']
 
         if node.kind == Parser.CONST:
             if self.name != 'main':
-                self.CALLS.append(str(node.value) + '\n')
+                self.CODE.append('\tpush eax, {}\n'.format(node.value))
             else:
-                self.CODE.append(str(node.value) + '\n')
+                self.CODE.append('\tpush eax, {}\n'.format(node.value))
 
         if node.kind == Parser.EXPR:
             self.compile(node.op1)
