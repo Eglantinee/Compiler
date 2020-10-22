@@ -447,8 +447,8 @@ END main''']
         elif node.kind == Parser.BIN_PROD:
             if node.op1[0].kind not in [Parser.BIN_XOR, Parser.BIN_DIV]:
                 self.CODE.append("\tmov eax, {}\n".format(define(node.op1[0])))
-                for i in range(1, len(node.op1) - 1):
-                    self.CODE.append('\tmov ecx, {}\n\tmul ecx\n'.format(define(node.op1[i])))
+                for i in node.op1[1:]:
+                    self.CODE.append('\tmov ecx, {}\n\tmul ecx\n'.format(define(i)))
                 self.CODE.append('\tpush eax\n')
             else:
                 self.compile(node.op1[0])
@@ -490,9 +490,9 @@ END main''']
 
         if node.kind == Parser.CONST:
             if self.name != 'main':
-                self.CODE.append('\tpush eax, {}\n'.format(node.value))
+                self.CODE.append('\tpush {}\n'.format(node.value))
             else:
-                self.CODE.append('\tpush eax, {}\n'.format(node.value))
+                self.CODE.append('\tpush {}\n'.format(node.value))
 
         if node.kind == Parser.EXPR:
             self.compile(node.op1)
@@ -510,7 +510,7 @@ END main''']
         f = open('output.asm', 'w')
         self.CODE.extend(self.CALLS)
         self.program += self.HEAD
-        # self.program += self.DATA
+        self.program += self.DATA
         self.program += self.CODE
         self.program += self.END
         for i in self.program:
@@ -534,3 +534,5 @@ END main''']
 #   operations should be checked)
 #   2) Parser is really good but it should have other level for XOR operation
 #   3) In code generator variable map isn't used it should be fixed
+#   4) XOR has lover priority then PRODUCT
+#   5) 22 isn't work

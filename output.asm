@@ -7,17 +7,21 @@ include     D:\masm32\include\masm32.inc
 includelib    D:\masm32\lib\kernel32.lib
 includelib    D:\masm32\lib\masm32.lib
 NumbToStr    PROTO: DWORD,:DWORD
+.data
+buff        db 11 dup(?)
 .code
 main:
 	xor eax, eax
 	xor ebx, ebx
 	xor ecx, ecx
 	sub esp, 4
-	push eax, 10
+	push 10
 	pop eax
 	mov dword ptr [ebp - 4], eax
 	mov eax, [ebp - 4]
 	mov ecx, 5
+	mul ecx
+	mov ecx, 22
 	mul ecx
 	push eax
 	pop eax
