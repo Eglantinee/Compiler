@@ -8,8 +8,8 @@ from collections.abc import Iterable
 
 def debug(token):
     print(token)
-    lxr = ('NUM', 'ID', 'INT', 'FLOAT', 'LBRA', 'RBRA', 'RETURN', 'LPAR', 'RPAR', 'SEMICOLON', 'NOT', 'PROD', 'EOF')
-    print("tok type = " + lxr[token.type])
+    # lxr = ('NUM', 'ID', 'INT', 'FLOAT', 'LBRA', 'RBRA', 'RETURN', 'LPAR', 'RPAR', 'SEMICOLON', 'NOT', 'PROD', 'EOF')
+    # print("tok type = " + lxr[token.type])
 
 
 class Lexer:
@@ -125,11 +125,15 @@ class Parser:
         sys.exit(1)
 
     def factor(self):
-        print("Enter factor", inspect.currentframe().f_back)
+        print("Enter factor")
+        print(self.token)
         if self.token.type == Lexer.LPAR:
             n = Node(Parser.EXPR)
             self.next_token()
-            n.op1 = self.term()
+            print("BRACK ", self.tokens)
+            n.op1 = self.expr()
+            self.next_token()
+            # sys.exit(self.tokens)
             if self.token.type != Lexer.RPAR:
                 debug(self.token)
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
@@ -156,13 +160,11 @@ class Parser:
                 tok_val = int(float(value))
             elif mtype == 'hex':
                 tok_val = int(value, 16)
-            n = Node(Parser.CONST, tok_val)
+            n = Node(Parser.CONST, value=tok_val)
+            print("RETURN NUM", tok_val)
             return n
         elif self.token.type == Lexer.ID:
-            # if self.token.value not in self.var_map:
-            #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-            #     msg += "Undeclared variable"
-            #     self.error(msg)
+            print("RETURN ID")
             return Node(Parser.ID, value=self.token.value)
         else:
             debug(self.token)
@@ -170,87 +172,79 @@ class Parser:
             self.error(msg)
 
     def term(self):
-        # print(self.token)
-        # print("Enter term", inspect.currentframe().f_back)
+        print("DEBUG: enter TERM")
         elem = self.factor()
-        # print("/////////", self.token)
-        self.next_token()
-        # print("**************")
-        # print(self.token)
-        if self.token.type == Lexer.PROD or self.token.type == Lexer.DIV or self.token.type == Lexer.XOR:
+        print("CHECK", self.tokens[0].type in (Lexer.PROD, Lexer.DIV), self.tokens[0].type, (Lexer.PROD, Lexer.DIV) )
+        if self.tokens[0].type in (Lexer.PROD, Lexer.DIV):
+            self.next_token()
             op = self.token.type
-            # current_op = [elem]
-            current_op = []
-            n = Node(Parser.BINOP)
+            # n = Node(Parser.BINOP)
             daughter = None
             if self.token.type == Lexer.PROD:
                 daughter = Node(Parser.BIN_PROD, op1=[])
             elif self.token.type == Lexer.DIV:
                 daughter = Node(Parser.BIN_DIV, op1=[])
-            else:
-                daughter = Node(Parser.BIN_XOR, op1=[])
             daughter.op1.append(elem)
             self.next_token()
             daughter.op1.append(self.factor())
-            # current_op.append(self.factor())
-            self.next_token()
             while True:
-                if self.token.type == op:
+                print("deb", self.tokens)
+                if self.tokens[0].type == op:
+                    self.next_token()
                     self.next_token()
                     daughter.op1.append(self.factor())
-                    self.next_token()
                     continue
-                elif self.token.type == Lexer.PROD:
+                elif self.tokens[0].type == Lexer.PROD:
                     op = Lexer.PROD
                     daughter = Node(Parser.BIN_PROD, op1=[daughter])
                     self.next_token()
-                    daughter.op1.append(self.factor())
                     self.next_token()
+                    daughter.op1.append(self.factor())
                     continue
-                elif self.token.type == Lexer.DIV:
+                elif self.tokens[0].type == Lexer.DIV:
                     op = Lexer.DIV
                     daughter = Node(Parser.BIN_DIV, op1=[daughter])
                     self.next_token()
-                    daughter.op1.append(self.factor())
-                    self.next_token()
-                    continue
-                elif self.token.type == Lexer.XOR:
-                    op = Lexer.XOR
-                    daughter = Node(Parser.BIN_XOR, op1=[daughter])
                     self.next_token()
                     daughter.op1.append(self.factor())
-                    self.next_token()
                     continue
                 else:
                     break
-            # self.terms.append(current_op)
-            n.op1 = daughter
-            # print(self.terms)
-            return n
-        # elif self.token.type == Lexer.DIV:
-        #     daughter = Node(Lexer.DIV, op1=[])
-        #     while True:
+            # n.op1 = daughter
+            return daughter
+        return elem
 
+    def bit_op(self):
+        print("DEBUG: enter BIT_OP")
+        elem = self.term()
+        if self.tokens[0].type == Lexer.XOR:
+            self.next_token()
+            n = Node(Parser.BIN_XOR, op1=[elem])
+            self.next_token()
+            n.op1.append(self.term())
+            while True:
+                if self.tokens[0].type == Lexer.XOR:
+                    self.next_token()
+                    self.next_token()
+                    n.op1.append(self.term())
+                else:
+                    break
+            return n
         return elem
 
     def expr(self):
-        print("DEBUG: enter EXPRESSION")
+        print("DEBUG: enter EXPR")
         if self.token.type == Lexer.ID:
-            remember = self.token
-            self.next_token()
-            if self.token.type == Lexer.EQUAL:
+            if self.tokens[0].type == Lexer.EQUAL:
+                self.next_token()
                 self.next_token()
                 return Node(Parser.EXPR, op1=self.expr())
-            elif self.token.type == Lexer.SEMICOLON:
-                return Node(Parser.ID, value=self.token.value)
             else:
-                print("COMMING")
-                self.tokens.insert(0, self.token)
-                self.token = remember
-                print(self.token)
-                return self.term()
+                return self.bit_op()
         else:
-            return self.term()
+            return self.bit_op()
+        # else:
+        #     return self.term()
 
     def statement(self):
         print("DEBUG: enter STATEMENT")
@@ -259,21 +253,15 @@ class Parser:
             n = Node(Parser.RET)
             self.next_token()
             n.op1 = self.expr()
-            if self.token.type == Lexer.PROD:
-                self.next_token()
-                tmp = self.expr()
-                if tmp.kind != Parser.UNOP and tmp.kind != Parser.CONST:
-                    msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                    self.error(msg)
-                else:
-                    n.op2 = tmp
+            self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol) + ' ' + str(self.tokens)
                 self.error(msg + " semicolon expected")
             if 'return' not in self.stmts.keys():
                 self.stmts['return'] = n
             else:
                 n = self.stmts['return']
+            print("EXIT WITH ", self.tokens, self.token)
             return n
         elif self.token.type == Lexer.INT:
             self.next_token()
@@ -282,24 +270,28 @@ class Parser:
                 self.next_token()
                 if self.token.type == Lexer.EQUAL:
                     self.next_token()
-                    return Node(Parser.DECL, op1=tok_id, op2=self.expr())
+                    n = Node(Parser.DECL, op1=tok_id, op2=self.expr())
+                    self.next_token()
+                    if self.token.type != Lexer.SEMICOLON:
+                        print(self.token)
+                        sys.exit("STMT ERROR")
+                    else:
+                        return n
                 elif self.token.type == Lexer.SEMICOLON:
-                    # if self.token.value not in self.var_map:
-                    #     self.var_map.add(self.token.value)
-                    # else:
-                    #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                    #     msg += "Undeclared variable"
-                    #     self.error(msg)
                     return Node(Parser.DECL, op1=tok_id)
                 else:
                     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                     self.error(msg)
-        # elif self.token.type == Lexer.ID and self.token.value not in self.var_map:
-        #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-        #     msg += "Undeclared variable"
-        #     self.error(msg)
+            else:
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol) + ' STATEMENT ERROR'
+                self.error(msg)
         else:
-            return self.expr()
+            n = self.expr()
+            self.next_token()
+            if self.token.type != Lexer.SEMICOLON:
+                sys.exit(self.tokens)
+            else:
+                return n
 
     def function(self):
         print("DEBUG: enter FUNCTION")
@@ -307,9 +299,6 @@ class Parser:
             self.next_token()
             if self.token.type == Lexer.ID:
                 name = self.token.value
-                # if name in self.names:  # This means we have the same functions name
-                #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                #     self.error(msg + " bad identifier")
                 self.names.add(name)
                 self.next_token()
                 if self.token.type == Lexer.LPAR:
@@ -323,10 +312,12 @@ class Parser:
                             self.stmts.clear()
                             while True:
                                 elem = self.statement()
+                                print("UPDATE ", self.tokens)
                                 # statms.append((elem.kind, elem))    # Make list of statements --- idea of optimization is to ignore all after retuen statement
                                 statms.append(elem)
                                 self.next_token()
-                                print("ALARM_____________", self.token)
+                                # print("ALARM_____________", self.token)
+                                # print("HERE ERR ", self.tokens)
                                 if self.token.type == Lexer.RBRA:
                                     n.op1 = statms.copy()
                                     self.next_token()
@@ -520,19 +511,8 @@ END main''']
     def rest(self):
         return self.program
 
-# a = Lexer('lab1.c')
-# a = a.next_token()
-# p = Parser(a)
-# ast = p.parse()
-#
-# com = Compile()
-# com.compile(ast)
-# com.printer()
-
 # TODO
 #   1) Continue working with code generator it is nearly good but still far (xor don't work and other
 #   operations should be checked)
-#   2) Parser is really good but it should have other level for XOR operation
-#   3) In code generator variable map isn't used it should be fixed
-#   4) XOR has lover priority then PRODUCT
-#   5) 22 isn't work
+#   2) Parser is really good but it should have other level for XOR operation - XOR has lover priority then PRODUCT
+#   3) float support should be add
