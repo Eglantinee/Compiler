@@ -18,8 +18,12 @@ def tree_ast(ast, n):
     if ast is None:
         return
     print(' ' * 2 * n, nodes[ast.kind], end=" ")
-    if ast.kind == Parser.CONST:
+    if ast.value:
         print(ast.value)
+    # if ast.kind == Parser.CONST:
+    #     print(ast.value)
+    # elif ast.kind == Parser.ID:
+    #     print(ast.value)
     else:
         print(" ")
     if isinstance(ast.op1, Iterable):

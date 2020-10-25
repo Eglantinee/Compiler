@@ -1,5 +1,6 @@
 int main(){
-float b = 22;
-b = a * 5 ^ 10 ^ 22 / 333 / 122 * 2;
+float b;
+int a = 21;
+b = a * (5* 111);
 return a;
 }
