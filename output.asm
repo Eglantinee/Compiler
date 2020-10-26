@@ -16,14 +16,14 @@ main:
 	xor ecx, ecx
 	sub esp, 4
 	sub esp, 4
-	push 21
+	push 2
 	pop eax
 	mov dword ptr [ebp - 8], eax
 	mov eax, [ebp - 8]
 	push eax
 	mov eax, 5
 	push eax
-	mov eax, 111
+	mov eax, 10
 	push eax
 	pop ecx
 	pop eax
@@ -33,7 +33,25 @@ main:
 	pop eax
 	mul ecx
 	push eax
-	mov ebx, [ebp - 8]
+	mov eax, 10
+	push eax
+	pop ecx
+	pop eax
+	cdq
+	idiv ecx
+	push eax
+	mov eax, 3
+	push eax
+	pop ecx
+	pop eax
+	xor eax, ecx
+	push eax
+	push 3
+	pop ecx
+	pop eax
+	xor eax, ecx
+	push eax
+	pop ebx
 invoke  NumbToStr, ebx, ADDR buff
 invoke  StdOut,eax
 invoke  ExitProcess, 0

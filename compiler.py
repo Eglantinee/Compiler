@@ -392,6 +392,8 @@ END main''']
     def compile(self, node):
         def define(elem):
             if elem.kind == Parser.CONST:
+                if self.ttype not in (Lexer.FLOAT, None) and elem.ttype == Lexer.FLOAT:
+                    sys.exit("var vas declared as int ahahha")
                 return str(elem.value)
             else:
                 if elem.value not in self.var_map.keys():
@@ -439,7 +441,6 @@ END main''']
                 if node.op1.kind not in (Parser.CONST, Parser.ID):
                     self.compile(node.op1)
                     self.CODE.append('\tpop ebx\n')
-                    self.pp_count -= 1
                 else:
                     self.CODE.append("\tmov ebx, {}\n".format(define(node.op1)))
             else:
@@ -462,31 +463,37 @@ END main''']
                 if k >= 2:
                     multiple()
 
-
         elif node.kind == Parser.BIN_DIV:
-            if self.ttype != Lexer.FLOAT:
-                sys.exit("var vas declared as int")
-            if node.op1[0].kind not in [Parser.BIN_XOR, Parser.BIN_PROD]:
-                self.CODE.append("\tmov eax, {}\n".format(define(node.op1[0])))
-                for i in node.op1[1:]:
-                    self.CODE.append('\tmov ecx, {}\n\tdiv ecx\n\tcdq\n'.format(define(i)))
-                self.CODE.append('\tpush eax\n')
-            else:
-                self.compile(node.op1[0])
-                self.CODE.append("\tpop eax\n")
-                for i in node.op1[1:]:
-                    self.CODE.append('\tmov ecx, {}\n'.format(define(i)))
-                    self.CODE.append('\tdiv ecx\n\tcdq\n')
-                self.CODE.append("\tpush eax\n")
+            def multiple():
+                self.CODE.append('\tpop ecx\n\tpop eax\n\tcdq\n\tidiv ecx\n\tpush eax\n')
+
+            k = 0
+            for i in node.op1:
+                if i.kind in (Parser.CONST, Parser.ID):
+                    if self.ttype not in (Lexer.FLOAT, None):
+                        sys.exit("var vas declared as int")
+                    self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
+                    k += 1
+                else:
+                    self.compile(i)
+                    k += 1
+                if k >= 2:
+                    multiple()
 
         elif node.kind == Parser.BIN_XOR:
+            def multiple():
+                self.CODE.append('\tpop ecx\n\tpop eax\n\txor eax, ecx\n\tpush eax\n')
+
+            k = 0
             for i in node.op1:
-                if i.kind in [Parser.BIN_PROD, Parser.BIN_DIV]:
+                if i.kind in (Parser.CONST, Parser.ID):
+                    self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
+                    k += 1
+                else:
                     self.compile(i)
-                    continue
-                self.CODE.append('\tpop eax\n\tmov ecx, {}\n'.format(define(i)))
-                self.CODE.append('\txor eax, ecx\n')
-                self.CODE.append('\tpush eax\n')
+                    k += 1
+                if k >= 2:
+                    multiple()
         elif node.kind == Parser.UNOP:
             if node.op1.kind not in (Parser.CONST, Parser.ID):
                 self.compile(node.op1)
@@ -495,6 +502,7 @@ END main''']
             else:
                 self.CODE.append('\tmov eax, {}\n'.format(define(node.op1)))
                 self.CODE.append("\tcmp eax, 0\n\tsete al\n")
+            self.CODE.append('\tpush eax\n')
 
         elif node.kind == Parser.CONST:
             if node.ttype == Lexer.FLOAT and self.ttype != Lexer.FLOAT:
@@ -525,4 +533,8 @@ END main''']
 # TODO
 #   1) Continue working with code generator it is nearly good but still far (xor don't work and other
 #   operations should be checked)
-#   2) float support should be add
+#   2) add prologue and epilogue + make function for (xor, div, prod) -> same code coping
+#   3) add support for multiple '!!!!'
+#   4) zero division check
+#   5) b = expr don't work -> should mov [], <- value
+#   6) maybe make more comfortable error messages
