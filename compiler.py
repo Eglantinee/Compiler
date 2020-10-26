@@ -360,11 +360,12 @@ class Compile:
             'includelib    D:\masm32\lib\kernel32.lib\n', 'includelib    D:\masm32\lib\masm32.lib\n',
             'NumbToStr    PROTO: DWORD,:DWORD\n']
 
-    DATA = ['.data\n', 'buff        db 11 dup(?)\n']
+    DATA = ['.data\n', 'zero_div_msg db \'zero division\', 0\n', 'buff        db 11 dup(?)\n']
 
-    CODE = ['.code\n', 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n"]
+    CODE = ['.code\n', 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
 
-    CALLS = ['invoke  NumbToStr, ebx, ADDR buff\n', 'invoke  StdOut,eax\n', 'invoke  ExitProcess, 0\n']
+    CALLS = ['\tmov esp, ebp\n\tpop ebp\ninvoke  NumbToStr, ebx, ADDR buff\n', 'invoke  StdOut,eax\n',
+             'invoke  ExitProcess, 0\n\nerror:\n\tinvoke StdOut, addr zero_div_msg\n\tinvoke ExitProcess, 1\n\n']
 
     END = ['''NumbToStr PROC uses ebx x:DWORD, buffer:DWORD
     mov     ecx, buffer
@@ -421,7 +422,11 @@ END main''']
         elif node.kind == Parser.EXPR:
             if node.value:
                 self.ttype = self.var_map[node.value][1]
-            self.compile(node.op1)
+                self.compile(node.op1)
+                self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(self.var_map[node.value][0]))
+                self.ttype = None
+            else:
+                self.compile(node.op1)
 
         elif node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
@@ -465,7 +470,7 @@ END main''']
 
         elif node.kind == Parser.BIN_DIV:
             def multiple():
-                self.CODE.append('\tpop ecx\n\tpop eax\n\tcdq\n\tidiv ecx\n\tpush eax\n')
+                self.CODE.append('\tpop ecx\n\tcmp ecx, 0\n\tje error\n\tpop eax\n\tcdq\n\tidiv ecx\n\tpush eax\n')
 
             k = 0
             for i in node.op1:
@@ -533,8 +538,9 @@ END main''']
 # TODO
 #   1) Continue working with code generator it is nearly good but still far (xor don't work and other
 #   operations should be checked)
-#   2) add prologue and epilogue + make function for (xor, div, prod) -> same code coping
+#   2) add prologue and epilogue    ------------------------------------------------------------------------------FIX MB
+#       2.1make function for (xor, div, prod) -> same code coping
 #   3) add support for multiple '!!!!'
-#   4) zero division check
-#   5) b = expr don't work -> should mov [], <- value
+#   4) zero division check --> it is hard to do so we can just do cmp ecx, 0 je Error ----------------------------FIX MB
+#   5) b = expr don't work -> should mov [], <- value  -----------------------------------------------------------FIX MB
 #   6) maybe make more comfortable error messages

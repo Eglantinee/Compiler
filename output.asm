@@ -8,37 +8,34 @@ includelib    D:\masm32\lib\kernel32.lib
 includelib    D:\masm32\lib\masm32.lib
 NumbToStr    PROTO: DWORD,:DWORD
 .data
+zero_div_msg db 'zero division', 0
 buff        db 11 dup(?)
 .code
 main:
 	xor eax, eax
 	xor ebx, ebx
 	xor ecx, ecx
+	push ebp
+	mov ebp, esp
 	sub esp, 4
-	sub esp, 4
-	push 2
-	pop eax
-	mov dword ptr [ebp - 8], eax
-	mov eax, [ebp - 8]
+	mov eax, 22
 	push eax
-	mov eax, 5
-	push eax
-	mov eax, 10
+	mov eax, 11
 	push eax
 	pop ecx
 	pop eax
 	mul ecx
 	push eax
-	pop ecx
-	pop eax
-	mul ecx
-	push eax
-	mov eax, 10
+	mov eax, 22
 	push eax
 	pop ecx
+	cmp ecx, 0
+	je error
 	pop eax
 	cdq
 	idiv ecx
+	push eax
+	mov eax, 3
 	push eax
 	mov eax, 3
 	push eax
@@ -46,15 +43,30 @@ main:
 	pop eax
 	xor eax, ecx
 	push eax
-	push 3
-	pop ecx
 	pop eax
-	xor eax, ecx
+	cmp eax, 0
+	sete al
 	push eax
-	pop ebx
+	pop ecx
+	cmp ecx, 0
+	je error
+	pop eax
+	cdq
+	idiv ecx
+	push eax
+	pop eax
+	mov dword ptr [ebp - 4], eax
+	mov ebx, [ebp - 4]
+	mov esp, ebp
+	pop ebp
 invoke  NumbToStr, ebx, ADDR buff
 invoke  StdOut,eax
 invoke  ExitProcess, 0
+
+error:
+	invoke StdOut, addr zero_div_msg
+	invoke ExitProcess, 1
+
 NumbToStr PROC uses ebx x:DWORD, buffer:DWORD
     mov     ecx, buffer
     mov     eax, x
