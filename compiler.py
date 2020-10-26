@@ -5,13 +5,6 @@ from collections.abc import Iterable
 
 
 #   DECLARATION -- CALLER SHOULD GEN TEXT TOKEN!!!!
-
-def debug(token):
-    print(token)
-    # lxr = ('NUM', 'ID', 'INT', 'FLOAT', 'LBRA', 'RBRA', 'RETURN', 'LPAR', 'RPAR', 'SEMICOLON', 'NOT', 'PROD', 'EOF')
-    # print("tok type = " + lxr[token.type])
-
-
 class Lexer:
     def __init__(self, file):
         self.file = open(file, 'rb')
@@ -105,7 +98,7 @@ class Parser:
             self.token = self.tokens.pop(0)
             if self.token.valid is False:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                self.error('Error -> ' + msg)
+                self.error(msg)
         else:
             msg = "there are no tokens -> list is empty"
             self.error(msg)
@@ -119,21 +112,16 @@ class Parser:
 
     @staticmethod
     def error(msg):
-        print('Parser error:', msg)
+        print('Error:', msg)
         sys.exit(1)
 
     def factor(self):
-        print("Enter factor")
-        print(self.token)
         if self.token.type == Lexer.LPAR:
             n = Node(Parser.EXPR)
             self.next_token()
-            print("BRACK ", self.tokens)
             n.op1 = self.expr()
             self.next_token()
-            # sys.exit(self.tokens)
             if self.token.type != Lexer.RPAR:
-                debug(self.token)
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
             return n
@@ -141,12 +129,16 @@ class Parser:
             n = Node(Parser.UNOP)
             k = 1
             while True:
-                self.next_token()
-                if self.token.type == Lexer.NOT:
+                if self.tokens[0].type == Lexer.NOT:
+                    self.next_token()
                     k += 1
                     continue
                 else:
                     break
+            if k % 2 == 0:
+                n.op1 = self.factor()
+                return n
+            self.next_token()
             n.op1 = self.factor()
             return n
         elif self.token.type == Lexer.NUM:
@@ -164,24 +156,18 @@ class Parser:
                 tok_val = int(value, 16)
                 mtype = Lexer.INT
             n = Node(Parser.CONST, value=tok_val, ttype=mtype)
-            print("RETURN NUM", tok_val)
             return n
         elif self.token.type == Lexer.ID:
-            print("RETURN ID")
             return Node(Parser.ID, value=self.token.value)
         else:
-            debug(self.token)
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
 
     def term(self):
-        print("DEBUG: enter TERM")
         elem = self.factor()
-        print("CHECK", self.tokens[0].type in (Lexer.PROD, Lexer.DIV), self.tokens[0].type, (Lexer.PROD, Lexer.DIV))
         if self.tokens[0].type in (Lexer.PROD, Lexer.DIV):
             self.next_token()
             op = self.token.type
-            # n = Node(Parser.BINOP)
             daughter = None
             if self.token.type == Lexer.PROD:
                 daughter = Node(Parser.BIN_PROD, op1=[])
@@ -191,7 +177,6 @@ class Parser:
             self.next_token()
             daughter.op1.append(self.factor())
             while True:
-                print("deb", self.tokens)
                 if self.tokens[0].type == op:
                     self.next_token()
                     self.next_token()
@@ -213,12 +198,10 @@ class Parser:
                     continue
                 else:
                     break
-            # n.op1 = daughter
             return daughter
         return elem
 
     def bit_op(self):
-        print("DEBUG: enter BIT_OP")
         elem = self.term()
         if self.tokens[0].type == Lexer.XOR:
             self.next_token()
@@ -236,7 +219,6 @@ class Parser:
         return elem
 
     def expr(self):
-        print("DEBUG: enter EXPR")
         if self.token.type == Lexer.ID:
             var = self.token.value
             if self.tokens[0].type == Lexer.EQUAL:
@@ -249,21 +231,18 @@ class Parser:
             return self.bit_op()
 
     def statement(self):
-        print("DEBUG: enter STATEMENT")
-        # IT SEEMS TO BE BROKEN AS I SHOULD JUST CALL EXPRESSION AND PARSE RESULT! -> RETURN STATEMENT
         if self.token.type == Lexer.RETURN:
             n = Node(Parser.RET)
             self.next_token()
             n.op1 = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol) + ' ' + str(self.tokens)
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg + " semicolon expected")
             if 'return' not in self.stmts.keys():
                 self.stmts['return'] = n
             else:
                 n = self.stmts['return']
-            print("EXIT WITH ", self.tokens, self.token)
             return n
         elif self.token.type in (Lexer.INT, Lexer.FLOAT):
             ttype = self.token.type
@@ -276,8 +255,8 @@ class Parser:
                     n = Node(Parser.DECL, op1=tok_id, op2=self.expr(), ttype=ttype)
                     self.next_token()
                     if self.token.type != Lexer.SEMICOLON:
-                        print(self.token)
-                        sys.exit("STMT ERROR")
+                        msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                        self.error(msg + ' semicolon expected ')
                     else:
                         return n
                 elif self.token.type == Lexer.SEMICOLON:
@@ -286,18 +265,18 @@ class Parser:
                     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                     self.error(msg)
             else:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol) + ' STATEMENT ERROR'
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
         else:
             n = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                sys.exit(self.tokens)
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                self.error(msg + ' semicolon expected ')
             else:
                 return n
 
     def function(self):
-        print("DEBUG: enter FUNCTION")
         if self.token.type == Lexer.INT:
             self.next_token()
             if self.token.type == Lexer.ID:
@@ -315,7 +294,6 @@ class Parser:
                             self.stmts.clear()
                             while True:
                                 elem = self.statement()
-                                print("UPDATE ", self.tokens)
                                 # statms.append((elem.kind, elem))    # Make list of statements --- idea of optimization is to ignore all after retuen statement
                                 statms.append(elem)
                                 self.next_token()
@@ -326,8 +304,6 @@ class Parser:
                                 else:
                                     continue
                             self.arrs.append(n)  # make list of Functions
-                            # todo i don't understand logic upper
-
                             if self.token.type == Lexer.EOF and "main" not in self.names:
                                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                                 self.error(msg + " no main function")
@@ -347,10 +323,7 @@ class Parser:
 class Compile:
     def __init__(self):
         self.program = []
-        self.pp_count = 0
-        # self.flag = False
         self.name = None
-        # self.registers = ['eax']
         self.var_map = {}
         self.counter = 0
         self.ttype = None
@@ -394,11 +367,13 @@ END main''']
         def define(elem):
             if elem.kind == Parser.CONST:
                 if self.ttype not in (Lexer.FLOAT, None) and elem.ttype == Lexer.FLOAT:
-                    sys.exit("var vas declared as int ahahha")
+                    print("cant assign int to float")
+                    sys.exit(1)
                 return str(elem.value)
             else:
                 if elem.value not in self.var_map.keys():
-                    sys.exit("use var before assignment" + elem.value)
+                    print('Use var {} before assignment'.format(elem.value))
+                    sys.exit(1)
                 return str('[ebp - {}]'.format(self.var_map[elem.value][0]))
 
         if node.kind == Parser.PROG:
@@ -421,6 +396,9 @@ END main''']
 
         elif node.kind == Parser.EXPR:
             if node.value:
+                if node.value not in self.var_map.keys():
+                    print("Use var {} before assignment".format(node.value))
+                    sys.exit(1)
                 self.ttype = self.var_map[node.value][1]
                 self.compile(node.op1)
                 self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(self.var_map[node.value][0]))
@@ -439,7 +417,6 @@ END main''']
                 self.ttype = None
                 self.CODE.append("\tpop eax\n")
                 self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
-                self.pp_count -= 1
 
         elif node.kind == Parser.RET:
             if self.name == "main":
@@ -476,7 +453,7 @@ END main''']
             for i in node.op1:
                 if i.kind in (Parser.CONST, Parser.ID):
                     if self.ttype not in (Lexer.FLOAT, None):
-                        sys.exit("var vas declared as int")
+                        sys.exit("var vas declared as int but DIV was called")
                     self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
                     k += 1
                 else:
@@ -511,7 +488,8 @@ END main''']
 
         elif node.kind == Parser.CONST:
             if node.ttype == Lexer.FLOAT and self.ttype != Lexer.FLOAT:
-                sys.exit('var vas declared as int')
+                print("cant assign int to float")
+                sys.exit(1)
             self.CODE.append('\tpush {}\n'.format(node.value))
 
         elif node.kind == Parser.ID:
@@ -519,7 +497,8 @@ END main''']
             if node.value not in self.var_map.keys():
                 self.var_map.update({node.value: (self.counter, node.ttype)})
             else:
-                sys.exit("repeatable " + node.value)
+                print("repeatable assign of {}".format(node.value))
+                sys.exit(1)
 
     def printer(self):
         f = open('output.asm', 'w')
@@ -536,11 +515,7 @@ END main''']
         return self.program
 
 # TODO
-#   1) Continue working with code generator it is nearly good but still far (xor don't work and other
-#   operations should be checked)
-#   2) add prologue and epilogue    ------------------------------------------------------------------------------FIX MB
-#       2.1make function for (xor, div, prod) -> same code coping
-#   3) add support for multiple '!!!!'
-#   4) zero division check --> it is hard to do so we can just do cmp ecx, 0 je Error ----------------------------FIX MB
-#   5) b = expr don't work -> should mov [], <- value  -----------------------------------------------------------FIX MB
-#   6) maybe make more comfortable error messages
+#   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
+#   2) maybe make more comfortable error messages (use norm errors in code gen)
+#   3) If there is no return statement or there are more then one
+#   4) fix lexer - it counted bad
