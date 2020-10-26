@@ -36,10 +36,10 @@ class Lexer:
             elif self.st.decode().isspace():
                 if self.st == b'\n':
                     self.row += 1
-                    self.symbol = 1
+                    self.symbol = 0
                 self.get()
             elif self.st.decode() in Lexer.SYMBOLS:
-                self.tokens.append(self.Token(True, Lexer.SYMBOLS[self.st.decode()], self.row, self.symbol - 1))
+                self.tokens.append(self.Token(True, Lexer.SYMBOLS[self.st.decode()], self.row, self.symbol))
                 self.get()
             elif self.st.isdigit():
                 k = "int"
@@ -65,7 +65,7 @@ class Lexer:
                     self.tokens.append(
                         self.Token(True, Lexer.NUM, self.row, self.symbol - len(tmp_str), value=[tmp_str, k]))
             elif self.st.decode().isalpha():
-                ident = ''
+                ident = str()
                 while self.st.isalnum() or self.st.decode() == "_":
                     ident = ident + self.st.decode()
                     self.get()
@@ -148,11 +148,11 @@ class Parser:
                 tok_val = int(value)
                 mtype = Lexer.INT
             elif mtype == 'float':
-                print("Successful adduction to int")
                 tok_val = int(float(value))
+                print("Successful adduction {} to int".format(value.decode()))
                 mtype = Lexer.FLOAT
             elif mtype == 'hex':
-                print("Successful adduction to int")
+                print("Successful adduction {} to int".format(value.decode()))
                 tok_val = int(value, 16)
                 mtype = Lexer.INT
             n = Node(Parser.CONST, value=tok_val, ttype=mtype)
@@ -237,7 +237,7 @@ class Parser:
             n.op1 = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                msg = "row: " + str(self.token.row - 1)
                 self.error(msg + " semicolon expected")
             if 'return' not in self.stmts.keys():
                 self.stmts['return'] = n
@@ -255,7 +255,7 @@ class Parser:
                     n = Node(Parser.DECL, op1=tok_id, op2=self.expr(), ttype=ttype)
                     self.next_token()
                     if self.token.type != Lexer.SEMICOLON:
-                        msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                        msg = "row: " + str(self.token.row - 1)
                         self.error(msg + ' semicolon expected ')
                     else:
                         return n
@@ -271,7 +271,7 @@ class Parser:
             n = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                msg = "row: " + str(self.token.row - 1)
                 self.error(msg + ' semicolon expected ')
             else:
                 return n
@@ -338,7 +338,7 @@ class Compile:
     CODE = ['.code\n', 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
 
     CALLS = ['\tmov esp, ebp\n\tpop ebp\ninvoke  NumbToStr, ebx, ADDR buff\n', 'invoke  StdOut,eax\n',
-             'invoke  ExitProcess, 0\n\nerror:\n\tinvoke StdOut, addr zero_div_msg\n\tinvoke ExitProcess, 1\n\n']
+             'invoke  ExitProcess, 0\n', '\nerror:\n\tinvoke StdOut, addr zero_div_msg\n\tinvoke ExitProcess, 1\n\n']
 
     END = ['''NumbToStr PROC uses ebx x:DWORD, buffer:DWORD
     mov     ecx, buffer
@@ -385,6 +385,13 @@ END main''']
         elif node.kind == Parser.FUNC:
             self.name = node.value
             if self.name == "main":
+                ret = False
+                for i in node.op1:
+                    if i.kind == Parser.RET:
+                        ret = True
+                        break
+                if not ret:
+                    self.CALLS = self.CALLS[2:]
                 self.iter_compile(node.op1)
             else:
                 self.name = 'my_' + self.name
@@ -517,5 +524,4 @@ END main''']
 # TODO
 #   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
 #   2) maybe make more comfortable error messages (use norm errors in code gen)
-#   3) If there is no return statement or there are more then one
-#   4) fix lexer - it counted bad
+#   3) If there are more then one return statement
