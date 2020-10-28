@@ -80,12 +80,13 @@ class Lexer:
 
 
 class Node:
-    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None):
+    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, err=None):
         self.kind = kind
         self.value = value
         self.op1 = op1
         self.op2 = op2
         self.ttype = ttype
+        self.err = err
 
 
 class Parser:
@@ -155,10 +156,10 @@ class Parser:
                 print("Successful adduction {} to int".format(value.decode()))
                 tok_val = int(value, 16)
                 mtype = Lexer.INT
-            n = Node(Parser.CONST, value=tok_val, ttype=mtype)
+            n = Node(Parser.CONST, value=tok_val, ttype=mtype, err=(self.token.row, self.token.symbol))
             return n
         elif self.token.type == Lexer.ID:
-            return Node(Parser.ID, value=self.token.value)
+            return Node(Parser.ID, value=self.token.value, err=(self.token.row, self.token.symbol))
         else:
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
@@ -172,7 +173,7 @@ class Parser:
             if self.token.type == Lexer.PROD:
                 daughter = Node(Parser.BIN_PROD, op1=[])
             elif self.token.type == Lexer.DIV:
-                daughter = Node(Parser.BIN_DIV, op1=[])
+                daughter = Node(Parser.BIN_DIV, op1=[], err=(self.token.row, self.token.symbol))
             daughter.op1.append(elem)
             self.next_token()
             daughter.op1.append(self.factor())
@@ -193,6 +194,7 @@ class Parser:
                     op = Lexer.DIV
                     daughter = Node(Parser.BIN_DIV, op1=[daughter])
                     self.next_token()
+                    daughter.err = (self.token.row, self.token.symbol)
                     self.next_token()
                     daughter.op1.append(self.factor())
                     continue
@@ -221,10 +223,11 @@ class Parser:
     def expr(self):
         if self.token.type == Lexer.ID:
             var = self.token.value
+            err = (self.token.row, self.token.symbol)
             if self.tokens[0].type == Lexer.EQUAL:
                 self.next_token()
                 self.next_token()
-                return Node(Parser.EXPR, op1=self.expr(), value=var)
+                return Node(Parser.EXPR, op1=self.expr(), value=var, err=err)
             else:
                 return self.bit_op()
         else:
@@ -327,6 +330,7 @@ class Compile:
         self.var_map = {}
         self.counter = 0
         self.ttype = None
+        self.current_var = None
 
     HEAD = ['.386\n', '.model flat,stdcall\n', 'option casemap:none\n', 'include     D:\masm32\include\windows.inc\n',
             'include     D:\masm32\include\kernel32.inc\n', 'include     D:\masm32\include\masm32.inc\n',
@@ -367,12 +371,15 @@ END main''']
         def define(elem):
             if elem.kind == Parser.CONST:
                 if self.ttype not in (Lexer.FLOAT, None) and elem.ttype == Lexer.FLOAT:
-                    print("cant assign int to float")
+                    print("cant assign int var {} to float".format(self.current_var))
+                    print('Error: row {}, symbol {}'.format(self.var_map[self.current_var][2][0],
+                                                            self.var_map[self.current_var][2][1]))
                     sys.exit(1)
                 return str(elem.value)
             else:
                 if elem.value not in self.var_map.keys():
                     print('Use var {} before assignment'.format(elem.value))
+                    print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
                     sys.exit(1)
                 return str('[ebp - {}]'.format(self.var_map[elem.value][0]))
 
@@ -405,11 +412,14 @@ END main''']
             if node.value:
                 if node.value not in self.var_map.keys():
                     print("Use var {} before assignment".format(node.value))
+                    print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
                     sys.exit(1)
                 self.ttype = self.var_map[node.value][1]
+                self.current_var = node.value
                 self.compile(node.op1)
                 self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(self.var_map[node.value][0]))
                 self.ttype = None
+                self.current_var = None
             else:
                 self.compile(node.op1)
 
@@ -417,11 +427,13 @@ END main''']
             self.CODE.append("\tsub esp, 4\n")
             self.counter += 4
             node.op1.ttype = node.ttype
+            self.current_var = node.op1.value
             self.compile(node.op1)  # Add var into var_map
             if node.op2:
                 self.ttype = node.ttype
                 self.compile(node.op2)
                 self.ttype = None
+                self.current_var = None
                 self.CODE.append("\tpop eax\n")
                 self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
 
@@ -456,11 +468,14 @@ END main''']
             def multiple():
                 self.CODE.append('\tpop ecx\n\tcmp ecx, 0\n\tje error\n\tpop eax\n\tcdq\n\tidiv ecx\n\tpush eax\n')
 
+            err = node.err
             k = 0
             for i in node.op1:
                 if i.kind in (Parser.CONST, Parser.ID):
                     if self.ttype not in (Lexer.FLOAT, None):
-                        sys.exit("var vas declared as int but DIV was called")
+                        print("var {} was declared as int but DIV was called".format(self.current_var))
+                        print('Error: row {}, symbol {}'.format(err[0], err[1]))
+                        sys.exit(1)
                     self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
                     k += 1
                 else:
@@ -495,16 +510,18 @@ END main''']
 
         elif node.kind == Parser.CONST:
             if node.ttype == Lexer.FLOAT and self.ttype != Lexer.FLOAT:
-                print("cant assign int to float")
+                print("cant assign int var {} to float".format(self.current_var))
+                print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
                 sys.exit(1)
             self.CODE.append('\tpush {}\n'.format(node.value))
 
         elif node.kind == Parser.ID:
             # THIS SHOULD BE CALLED JUST FOR DECLARATION!!!
             if node.value not in self.var_map.keys():
-                self.var_map.update({node.value: (self.counter, node.ttype)})
+                self.var_map.update({node.value: (self.counter, node.ttype, node.err)})
             else:
                 print("repeatable assign of {}".format(node.value))
+                print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
                 sys.exit(1)
 
     def printer(self):
@@ -524,4 +541,4 @@ END main''']
 # TODO
 #   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
 #   2) maybe make more comfortable error messages (use norm errors in code gen)
-#   3) If there are more then one return statement
+#   3) If there are more then one return statement  --------------------------------------------------------HOTFIX
