@@ -381,6 +381,10 @@ END main''']
                     print('Use var {} before assignment'.format(elem.value))
                     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
                     sys.exit(1)
+                if self.ttype not in (Lexer.FLOAT, None) and self.var_map[elem.value][1] == Lexer.FLOAT:
+                    print("cant assign int var {} to float".format(self.current_var))
+                    print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
+                    sys.exit(1)
                 return str('[ebp - {}]'.format(self.var_map[elem.value][0]))
 
         if node.kind == Parser.PROG:
@@ -430,12 +434,21 @@ END main''']
             self.current_var = node.op1.value
             self.compile(node.op1)  # Add var into var_map
             if node.op2:
-                self.ttype = node.ttype
-                self.compile(node.op2)
-                self.ttype = None
-                self.current_var = None
-                self.CODE.append("\tpop eax\n")
-                self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
+
+                if node.op2.kind == Parser.ID:
+                    # sys.exit(str(node.op2.kind))
+                    self.ttype = node.ttype
+                    self.CODE.append('\tmov eax, {}'.format(define(node.op2)))
+                    self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
+                else:
+                    self.ttype = node.ttype
+                    self.compile(node.op2)
+                    self.ttype = None
+                    self.current_var = None
+                    self.CODE.append("\tpop eax\n")
+                    self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
+            else:
+                self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
 
         elif node.kind == Parser.RET:
             if self.name == "main":
@@ -542,3 +555,5 @@ END main''']
 #   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
 #   2) maybe make more comfortable error messages (use norm errors in code gen)
 #   3) If there are more then one return statement  --------------------------------------------------------HOTFIX
+#   4) make real tests couse if some hotfixes is needed it should be tested fast.
+#   5) Make norm compiler py -> use if sys.argv == 'main' -> run and it is no need in generator test only if we nedd Outup > /dev/null

@@ -20,6 +20,8 @@ def tree_ast(ast, n):
     print(' ' * 2 * n, nodes[ast.kind], end=" ")
     if ast.value:
         print(ast.value)
+    if ast.op2:
+        print(nodes[ast.op2.kind])
     # if ast.kind == Parser.CONST:
     #     print(ast.value)
     # elif ast.kind == Parser.ID:
