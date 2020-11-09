@@ -1,5 +1,5 @@
 int main(){
 float b;
-b = 22 * 11 / 22 / !(3 ^ 3);
+b ? (a=1): (a=2);
 return b;
 }

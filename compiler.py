@@ -16,9 +16,10 @@ class Lexer:
         self.Token = namedtuple("Token", 'valid, type, row, symbol, value',
                                 defaults=(self.value,))
 
-    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF = range(16)
+    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON = range(
+        18)
     SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
-               "/": DIV}
+               "/": DIV, "?": QUESTION, ":": COLON}
     WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT}
 
     def get(self):
@@ -80,11 +81,12 @@ class Lexer:
 
 
 class Node:
-    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, err=None):
+    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, op3=None, err=None):
         self.kind = kind
         self.value = value
         self.op1 = op1
         self.op2 = op2
+        self.op3 = op3
         self.ttype = ttype
         self.err = err
 
@@ -104,7 +106,7 @@ class Parser:
             msg = "there are no tokens -> list is empty"
             self.error(msg)
 
-    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, PROG = range(16)
+    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, PROG = range(17)
     names = set()
     arrs = []
     terms = []
@@ -118,6 +120,7 @@ class Parser:
 
     def factor(self):
         if self.token.type == Lexer.LPAR:
+            # TODO: DO I REALLY NEED TO CREATE SEPARATE NODE EXPR?
             n = Node(Parser.EXPR)
             self.next_token()
             n.op1 = self.expr()
@@ -220,6 +223,26 @@ class Parser:
             return n
         return elem
 
+    def cond_expr(self):
+        e1 = self.bit_op()
+        if self.tokens[0].type == Lexer.QUESTION:
+            self.next_token()
+            self.next_token()
+            e2 = self.expr()
+            self.next_token()
+            self.next_token()
+            # sys.exit(self.token)
+            e3 = self.cond_expr()
+            # if self.tokens[0].type != Lexer.SEMICOLON:
+            #     self.next_token()
+            # self.next_token()
+            # if self.token.type != Lexer.SEMICOLON:
+            #     return self.error("COND_EXPR")
+            # print("Create Ternary ", e1.kind, e2.kind, e3.kind)
+            return Node(Parser.TERNARY, op1=e1, op2=e2, op3=e3)
+        else:
+            return e1
+
     def expr(self):
         if self.token.type == Lexer.ID:
             var = self.token.value
@@ -229,9 +252,9 @@ class Parser:
                 self.next_token()
                 return Node(Parser.EXPR, op1=self.expr(), value=var, err=err)
             else:
-                return self.bit_op()
+                return self.cond_expr()
         else:
-            return self.bit_op()
+            return self.cond_expr()
 
     def statement(self):
         if self.token.type == Lexer.RETURN:
@@ -240,7 +263,8 @@ class Parser:
             n.op1 = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "row: " + str(self.token.row - 1)
+                msg = "Raise error in 263 line\n"
+                msg += "row: " + str(self.token.row - 1)
                 self.error(msg + " semicolon expected")
             if 'return' not in self.stmts.keys():
                 self.stmts['return'] = n
@@ -258,7 +282,8 @@ class Parser:
                     n = Node(Parser.DECL, op1=tok_id, op2=self.expr(), ttype=ttype)
                     self.next_token()
                     if self.token.type != Lexer.SEMICOLON:
-                        msg = "row: " + str(self.token.row - 1)
+                        msg = "Raise error in 281 line\n"
+                        msg += "row: " + str(self.token.row - 1)
                         self.error(msg + ' semicolon expected ')
                     else:
                         return n
@@ -274,7 +299,8 @@ class Parser:
             n = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "row: " + str(self.token.row - 1)
+                msg = "Raise error in 299 line\n"
+                msg += "row: " + str(self.token.row - 1)
                 self.error(msg + ' semicolon expected ')
             else:
                 return n
@@ -555,5 +581,5 @@ END main''']
 #   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
 #   2) maybe make more comfortable error messages (use norm errors in code gen)
 #   3) If there are more then one return statement  --------------------------------------------------------HOTFIX
-#   4) make real tests couse if some hotfixes is needed it should be tested fast.
+#   4) make real tests cause if some hotfixes is needed it should be tested fast.
 #   5) Make norm compiler py -> use if sys.argv == 'main' -> run and it is no need in generator test only if we nedd Outup > /dev/null
