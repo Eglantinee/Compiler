@@ -351,6 +351,7 @@ class Parser:
 
 class Compile:
     def __init__(self):
+        self.if_counter = 0
         self.program = []
         self.name = None
         self.var_map = {}
@@ -475,6 +476,31 @@ END main''']
                     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
             else:
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
+
+        elif node.kind == Parser.TERNARY:
+            counter = self.if_counter
+            self.CODE.append("if{}:\n".format(counter))
+            if node.op1.kind in (Parser.CONST, Parser.ID):
+                self.CODE.append('\tmov eax, {}\n\tcmp eax, 0\n\tjle @else{}\n'.format(define(node.op1), counter))
+            else:
+                self.compile(node.op1)
+                self.CODE.append("\tpop eax\n\tcmp eax, 0\n\tjle @else{}\n".format(counter))
+            self.CODE.append("then{}:\n".format(counter))
+            if node.op2.kind in (Parser.CONST, Parser.ID):
+                self.CODE.append('\tmov eax, {}\n'.format(define(node.op1)))
+                self.CODE.append("\tjmp @end_if{}\n".format(counter))
+            else:
+                self.compile(node.op2)
+                self.CODE.append("\tjmp @end_if{}\n".format(counter))
+            self.CODE.append("else{}:\n".format(counter))
+            if node.op3.kind in (Parser.CONST, Parser.ID):
+                self.CODE.append('\tmov eax, {}\n'.format(define(node.op1)))
+            else:
+                self.compile(node.op3)
+            self.CODE.append("end_if{}:\n".format(counter))
+
+
+
 
         elif node.kind == Parser.RET:
             if self.name == "main":
