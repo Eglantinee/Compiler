@@ -106,7 +106,8 @@ class Parser:
             msg = "there are no tokens -> list is empty"
             self.error(msg)
 
-    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, PROG = range(17)
+    VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, PROG = range(
+        17)
     names = set()
     arrs = []
     terms = []
@@ -230,6 +231,10 @@ class Parser:
             self.next_token()
             e2 = self.expr()
             self.next_token()
+            if self.token.type != Lexer.COLON:
+                msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                msg += "\ncolumn (:) expected"
+                self.error(msg)
             self.next_token()
             # sys.exit(self.token)
             e3 = self.cond_expr()
@@ -292,6 +297,14 @@ class Parser:
                 else:
                     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                     self.error(msg)
+            elif self.token.type == Lexer.LBRA:
+                self.next_token()
+                while True:
+                    self.statement()
+                    self.next_token()
+                    if self.token.type == Lexer.RBRA:
+                        self.next_token()
+                        break
             else:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
@@ -352,6 +365,7 @@ class Parser:
 class Compile:
     def __init__(self):
         self.if_counter = 0
+        self.nested = [False, 0]
         self.program = []
         self.name = None
         self.var_map = {}
@@ -478,26 +492,43 @@ END main''']
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
 
         elif node.kind == Parser.TERNARY:
+            self.if_counter += 1
             counter = self.if_counter
-            self.CODE.append("if{}:\n".format(counter))
+            if self.nested[0] is False:
+                self.CODE.append("my_if{}:\n".format(counter))
+                self.nested[1] = self.if_counter
             if node.op1.kind in (Parser.CONST, Parser.ID):
-                self.CODE.append('\tmov eax, {}\n\tcmp eax, 0\n\tjle @else{}\n'.format(define(node.op1), counter))
+                self.CODE.append('\tmov eax, {}\n\tcmp eax, 0\n\tjle else{}\n'.format(define(node.op1), counter))
             else:
                 self.compile(node.op1)
-                self.CODE.append("\tpop eax\n\tcmp eax, 0\n\tjle @else{}\n".format(counter))
+                self.CODE.append("\tpop eax\n\tcmp eax, 0\n\tjle else{}\n".format(counter))
             self.CODE.append("then{}:\n".format(counter))
+            if node.op2.kind == Parser.TERNARY:
+                self.nested[0] = True
+                self.nested[1] = self.if_counter
             if node.op2.kind in (Parser.CONST, Parser.ID):
-                self.CODE.append('\tmov eax, {}\n'.format(define(node.op1)))
-                self.CODE.append("\tjmp @end_if{}\n".format(counter))
+                self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(node.op2)))
+                self.CODE.append("\tjmp end_if{}\n".format(self.nested[1]))
             else:
                 self.compile(node.op2)
-                self.CODE.append("\tjmp @end_if{}\n".format(counter))
+                self.CODE.append("\tjmp end_if{}\n".format(self.nested[1]))
             self.CODE.append("else{}:\n".format(counter))
+            if self.nested[1] == counter:
+                self.nested[0] = False
+            if node.op3.kind == Parser.TERNARY:
+                self.nested[0] = True
+                self.nested[1] = self.if_counter
             if node.op3.kind in (Parser.CONST, Parser.ID):
-                self.CODE.append('\tmov eax, {}\n'.format(define(node.op1)))
+                print(node.op3.kind)
+                self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(node.op3)))
             else:
                 self.compile(node.op3)
-            self.CODE.append("end_if{}:\n".format(counter))
+            if self.nested[1] == counter:
+                self.nested[0] = False
+            print(self.nested)
+            if self.nested[0] is False:
+                self.CODE.append("end_if{}:\n".format(counter))
+            counter -= 1
 
 
 
@@ -605,7 +636,13 @@ END main''']
 
 # TODO
 #   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
-#   2) maybe make more comfortable error messages (use norm errors in code gen)
+#   2) maybe make more comfortable error messages (use norm errors in code gen and not only in code gen)
 #   3) If there are more then one return statement  --------------------------------------------------------HOTFIX
 #   4) make real tests cause if some hotfixes is needed it should be tested fast.
-#   5) Make norm compiler py -> use if sys.argv == 'main' -> run and it is no need in generator test only if we nedd Outup > /dev/null
+#   5) Make norm compiler.py -> use if sys.argv == 'main' -> run and it is no need in generator test only if we need
+#   output > /dev/null
+#   6) should found better solution to parse TERNARY into code gen
+#   7) There is interesting bug like b = b?expr:(a=2)?expr:expr --> a is defined above and it don't works but must
+#   8) Program don't use needed grammar -> missing declarations in body
+#   9) !(a=0) and !(a) works ugly
+#   10) I FUCKING MISSED ABOUT BLOCKS {....}
