@@ -16,10 +16,10 @@ class Lexer:
         self.Token = namedtuple("Token", 'valid, type, row, symbol, value',
                                 defaults=(self.value,))
 
-    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON = range(
-        18)
+    NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON, \
+    COMMA = range(19)
     SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
-               "/": DIV, "?": QUESTION, ":": COLON}
+               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA}
     WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT}
 
     def get(self):
@@ -108,7 +108,7 @@ class Parser:
             self.error(msg)
 
     VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, \
-    BLOCK, PROG = range(18)
+    BLOCK, ANNOUNCEMENT, CALL, EXOR, PROG = range(21)
     names = set()
     arrs = []
     terms = []
@@ -120,8 +120,39 @@ class Parser:
         print('Error:', msg)
         sys.exit(1)
 
+    def function_call(self):
+        if self.token.type == Lexer.ID:
+            name = self.token.value
+            if self.tokens[0].type == Lexer.LPAR:
+                n = Node(Parser.CALL)
+                params = []
+                self.next_token()
+                self.next_token()
+                while True:
+                    if self.token.type == Lexer.RPAR:
+                        break
+                    else:
+                        elem = self.expr()
+                        params.append(elem)
+                        self.next_token()
+                        if self.token.type == Lexer.COMMA:
+                            if self.tokens[0].type == Lexer.RPAR:
+                                sys.exit("138")
+                            else:
+                                self.next_token()
+                                continue
+                n.value = params
+                return n
+            else:
+                return None
+        else:
+            return None
+
     def factor(self):
-        if self.token.type == Lexer.LPAR:
+        call = self.function_call()
+        if call is not None:
+            return call
+        elif self.token.type == Lexer.LPAR:
             # TODO: DO I REALLY NEED TO CREATE SEPARATE NODE EXPR? Now i just mute it for a check
             # n = Node(Parser.EXPR)
             self.next_token()
@@ -258,6 +289,14 @@ class Parser:
                 self.next_token()
                 self.next_token()
                 return Node(Parser.EXPR, op1=self.expr(), value=var, err=err)
+            elif self.tokens[0].type == Lexer.XOR:
+                self.next_token()
+                self.next_token()
+                if self.token.type == Lexer.EQUAL:
+                    self.next_token()
+                    return Node(Parser.EXOR, op1=self.expr(), value=var, err=err)
+                else:
+                    sys.exit("279")
             else:
                 return self.cond_expr()
         else:
@@ -268,7 +307,8 @@ class Parser:
             ttype = self.token.type
             self.next_token()
             if self.token.type == Lexer.ID:
-                tok_id = self.factor()  # It should return Node with var name
+                # tok_id = self.factor()  # It should return Node with var name ---------- IT IS BROKEN
+                tok_id  = Node(Parser.ID, value=self.token.value)
                 self.next_token()
                 if self.token.type == Lexer.EQUAL:
                     self.next_token()
@@ -285,15 +325,6 @@ class Parser:
                 else:
                     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                     self.error(msg)
-            # IJUST DONT UNDERSTAND FOR WHAT IT WAS DONE
-            # elif self.token.type == Lexer.LBRA:
-            #     self.next_token()
-            #     while True:
-            #         self.statement()
-            #         self.next_token()
-            #         if self.token.type == Lexer.RBRA:
-            #             self.next_token()
-            #             break
             else:
                 msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
                 self.error(msg)
@@ -332,7 +363,7 @@ class Parser:
             n = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                msg = "Raise error in 299 line\n"
+                msg = "Raise error in 366 line\n"
                 msg += "row: " + str(self.token.row - 1)
                 self.error(msg + ' semicolon expected ')
             else:
@@ -354,39 +385,81 @@ class Parser:
                 self.next_token()
                 if self.token.type == Lexer.LPAR:
                     self.next_token()
-                    if self.token.type == Lexer.RPAR:
-                        self.next_token()
-                        if self.token.type == Lexer.LBRA:
+                    args = []
+                    # todo it this eta i don't understand which format i should use to store info about arguments
+                    while True:
+                        if self.token.type in (Lexer.FLOAT, Lexer.INT):
+                            ttype = self.token.type
                             self.next_token()
-                            blocks = []  # We can have many blocks in our function
-                            n = Node(Parser.FUNC, value=name)
-                            # self.stmts.clear()
-                            while True:
-                                # elem = self.statement()
-                                elem = self.block_item()
-                                # statms.append((elem.kind, elem))    # Make list of statements --- idea of optimization is to ignore all after retuen statement
-                                blocks.append(elem)
+                            if self.token.type == Lexer.ID:
+                                args.append((self.token.value, ttype))
                                 self.next_token()
-                                if self.token.type == Lexer.RBRA:
-                                    n.op1 = blocks
-                                    break
+                                if self.token.type == Lexer.COMMA:
+                                    if self.tokens[0].type not in (Lexer.FLOAT, Lexer.INT):
+                                        sys.exit('368')
+                                    else:
+                                        self.next_token()
+                                        continue
+                                elif self.token.type != Lexer.RPAR:
+                                    sys.exit('373')
                                 else:
                                     continue
-                            self.arrs.append(n)  # make list of Functions
-                            # if self.token.type == Lexer.EOF and "main" not in self.names:
-                            #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-                            #     self.error(msg + " no main function")
-                            # elif self.token.type != Lexer.EOF:
-                            #     self.function()
-                            return self.arrs
+                            else:
+                                sys.exit('371')
+                        elif self.token.type == Lexer.RPAR:
+                            self.next_token()
+                            break
+                        else:
+                            sys.exit('376')
+                    # if self.token.type == Lexer.RPAR:
+                    #     self.next_token()
+                    if self.token.type == Lexer.LBRA:
+                        self.next_token()
+                        blocks = []  # We can have many blocks in our function
+                        n = Node(Parser.FUNC, value=name)
+                        while True:
+                            elem = self.block_item()
+                            blocks.append(elem)
+                            self.next_token()
+                            if self.token.type == Lexer.RBRA:
+                                n.op1 = blocks
+                                n.value = args  # it is temporary fix
+                                break
+                            else:
+                                continue
+                        # # todo IDK what in this code is done
+                        # self.arrs.append(n)  # make list of Functions
+                        # # if self.token.type == Lexer.EOF and "main" not in self.names:
+                        # #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+                        # #     self.error(msg + " no main function")
+                        # # elif self.token.type != Lexer.EOF:
+                        # #     self.function()
+                        # tmp = self.arrs[0]
+                        # self.arrs.clear()
+                        return n
+                    elif self.token.type == Lexer.SEMICOLON:
+                        n = Node(Parser.ANNOUNCEMENT, value=args)
+                        return n
+                    else:
+                        return None
 
     def parse(self):
-        self.next_token()
-        node = Node(Parser.PROG, op1=self.function())
-        self.next_token()
+        node = Node(Parser.PROG)
+        functions = []
+        self.next_token()  # get first token
+        while True:
+            if self.token.type == Lexer.EOF:
+                break
+            elem = self.function()
+            if elem:
+                functions.append(elem)
+            else:
+                sys.exit("428")
+            self.next_token()
         if self.token.type != Lexer.EOF:
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
+        node.op1 = functions
         return node
 
 
@@ -683,3 +756,4 @@ if __name__ == '__main__':
 #   it is code gen problem
 #   9) !(a=0) and !(a) works ugly --> also code gen problem
 #   10) Do blocks in code generator
+#   11) in lab  5 i just do parser

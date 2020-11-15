@@ -2,7 +2,7 @@ from compiler import Lexer, Parser
 from collections.abc import Iterable
 
 nodes = ['VAR', 'CONST', 'RET', 'EXPR', 'FUNC', 'UNOP', 'BINOP', 'BIN_PROD', 'BIN_DIV', 'BIN_XOR', 'FACTOR', 'TERM',
-         'DECL', 'STMT', 'ID', 'TERNARY', 'BLOCK', 'PROG']
+         'DECL', 'STMT', 'ID', 'TERNARY', 'BLOCK', 'ANNOUNCEMENT', 'CALL', 'EXOR', 'PROG']
 
 file = 'lab1.c'
 lex = Lexer(file)
