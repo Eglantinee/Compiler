@@ -154,7 +154,8 @@ class Parser:
         if call is not None:
             return call
         elif self.token.type == Lexer.LPAR:
-            # TODO: DO I REALLY NEED TO CREATE SEPARATE NODE EXPR? Now i just mute it for a check
+            # TODO: DO I REALLY NEED TO CREATE SEPARATE NODE EXPR? Now i just mute it for a check -- seems to be good\
+            #  decision
             # n = Node(Parser.EXPR)
             self.next_token()
             # n.op1 = self.expr()
@@ -285,7 +286,9 @@ class Parser:
     def expr(self):
         if self.token.type == Lexer.ID:
             # var = self.token.value
-            var = self.cond_expr()  # should return id node
+            # var = self.cond_expr()  # should return id node
+            # todo it is really broken -- if we run self.cond_epr it wont work but I would like it to be done
+            var = Node(Parser.ID, value=self.token.value)
             err = (self.token.row, self.token.symbol)
             if self.tokens[0].type == Lexer.EQUAL:
                 self.next_token()
@@ -525,10 +528,11 @@ END main''']
                 return str(elem.value)
             else:
                 if elem.value not in self.var_map.keys():
-                    print(self.scope, self.var_map)
+                    # print(self.scope, self.var_map)
                     if self.scope:
-                        for i in self.scope:
+                        for i in self.scope[::-1]:
                             if elem.value in i.keys():
+                                # todo this should not return before check float point
                                 return str('[ebp - {}]'.format(i[elem.value][0]))
                     print('Use var {} before assignment'.format(elem.value))
                     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
@@ -622,7 +626,7 @@ END main''']
                 if node.op2.kind == Parser.ID:
                     # sys.exit(str(node.op2.kind))
                     self.ttype = node.ttype
-                    self.CODE.append('\tmov eax, {}'.format(define(node.op2)))
+                    self.CODE.append('\tmov eax, {}\n'.format(define(node.op2)))
                     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
                 else:
                     self.ttype = node.ttype
@@ -790,15 +794,12 @@ if __name__ == '__main__':
     com.printer()
 
 # TODO
-#   1) make function for (xor, div, prod) -> same code coping   --------------------------------------------SKIPP IT
-#   2) maybe make more comfortable error messages (use norm errors in code gen and not only in code gen)
-#   3) If there are more then one return statement  --------------------------------------------------------HOTFIX
+#   1) make function for (xor, div, prod) -> same code coping
+#   2) error messages are ugly through all code, many bugs
+#   3) If there are more then one return statement
 #   4) make real tests cause if some hotfixes is needed it should be tested fast.
 #   6) should found better solution to parse TERNARY into CODE GEN
-#   7) There is interesting bug like b = b?expr:(a=2)?expr:expr --> a is defined above and it don't works but must --> \
-#   it is code gen problem
-#   9) !(a=0) and !(a) works ugly --> also code gen problem
-#   10) Do blocks in code generator
+#   ---------------------------------------------------------------------------------
+#   9) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push)
 #   11) in lab  5 i just do parser
-#   12) a = b dont work -- FIX
-#   13) ugly type checking  float == int; check if int a; {int a = a;} works? ckeck for code gen for inner blocks
+#   13) ugly type checking  float == int; !!!!!!!!!!!!!!!!!!!!
