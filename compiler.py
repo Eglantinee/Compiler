@@ -81,7 +81,7 @@ class Lexer:
 
 
 class Node:
-    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, op3=None, err=None):
+    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, op3=None, err=None, args=None):
         self.kind = kind
         self.value = value
         self.op1 = op1
@@ -89,6 +89,7 @@ class Node:
         self.op3 = op3
         self.ttype = ttype
         self.err = err
+        self.args = args
 
 
 class Parser:
@@ -308,7 +309,7 @@ class Parser:
             self.next_token()
             if self.token.type == Lexer.ID:
                 # tok_id = self.factor()  # It should return Node with var name ---------- IT IS BROKEN
-                tok_id  = Node(Parser.ID, value=self.token.value)
+                tok_id = Node(Parser.ID, value=self.token.value)
                 self.next_token()
                 if self.token.type == Lexer.EQUAL:
                     self.next_token()
@@ -423,11 +424,12 @@ class Parser:
                             self.next_token()
                             if self.token.type == Lexer.RBRA:
                                 n.op1 = blocks
-                                n.value = args  # it is temporary fix
+                                n.value = name
+                                n.args = args  # it is temporary fix
                                 break
                             else:
                                 continue
-                        # # todo IDK what in this code is done
+                        # # todo IDK what in this code does
                         # self.arrs.append(n)  # make list of Functions
                         # # if self.token.type == Lexer.EOF and "main" not in self.names:
                         # #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
@@ -438,7 +440,7 @@ class Parser:
                         # self.arrs.clear()
                         return n
                     elif self.token.type == Lexer.SEMICOLON:
-                        n = Node(Parser.ANNOUNCEMENT, value=args)
+                        n = Node(Parser.ANNOUNCEMENT, args=args, value=name)
                         return n
                     else:
                         return None
@@ -470,6 +472,7 @@ class Compile:
         self.program = []
         self.name = None
         self.var_map = {}
+        self.scope = []
         self.counter = 0
         self.ttype = None
         self.current_var = None
@@ -511,6 +514,7 @@ END main''']
 
     def compile(self, node):
         def define(elem):
+            # This function should be called just for CONST and ID
             if elem.kind == Parser.CONST:
                 if self.ttype not in (Lexer.FLOAT, None) and elem.ttype == Lexer.FLOAT:
                     print("cant assign int var {} to float".format(self.current_var))
@@ -520,6 +524,11 @@ END main''']
                 return str(elem.value)
             else:
                 if elem.value not in self.var_map.keys():
+                    print(self.scope, self.var_map)
+                    if self.scope:
+                        for i in self.scope:
+                            if elem.value in i.keys():
+                                return str('[ebp - {}]'.format(self.var_map[elem.value][0]))
                     print('Use var {} before assignment'.format(elem.value))
                     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
                     sys.exit(1)
@@ -555,15 +564,31 @@ END main''']
                 self.CALLS.append(self.name + ' endp\n')
 
         elif node.kind == Parser.EXPR:
+            index = None
             if node.value:
                 if node.value not in self.var_map.keys():
-                    print("Use var {} before assignment".format(node.value))
-                    print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-                    sys.exit(1)
-                self.ttype = self.var_map[node.value][1]
+                    if self.scope:
+                        print(self.scope, self.var_map)
+                        for i in self.scope[-1:]:
+                            print(i)
+                            if node.value not in i.keys():
+                                print("Use var {} before assignment".format(node.value))
+                                print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
+                                sys.exit(1)
+                            else:
+                                self.ttype = i[node.value][1]
+                                index = i[node.value][0]
+                                break
+                    else:
+                        print("Use var {} before assignment".format(node.value))
+                        print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
+                        sys.exit(1)
+                else:
+                    index = self.var_map[node.value][0]
+                    self.ttype = self.var_map[node.value][1]
                 self.current_var = node.value
                 self.compile(node.op1)
-                self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(self.var_map[node.value][0]))
+                self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(index))
                 self.ttype = None
                 self.current_var = None
             else:
@@ -591,6 +616,13 @@ END main''']
                     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
             else:
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
+
+        elif node.kind == Parser.BLOCK:
+            outer = self.var_map.copy()
+            self.scope.append(outer)
+            self.var_map = {}
+            self.iter_compile(node.op1)
+            self.var_map = self.scope.pop()
 
         elif node.kind == Parser.TERNARY:
             self.if_counter += 1
@@ -630,9 +662,6 @@ END main''']
             if self.nested[0] is False:
                 self.CODE.append("end_if{}:\n".format(counter))
             counter -= 1
-
-
-
 
         elif node.kind == Parser.RET:
             if self.name == "main":
@@ -732,9 +761,6 @@ END main''']
             f.write(i)
         f.close()
 
-    def rest(self):
-        return self.program
-
 
 if __name__ == '__main__':
     a = Lexer('lab1.c')
@@ -757,3 +783,4 @@ if __name__ == '__main__':
 #   9) !(a=0) and !(a) works ugly --> also code gen problem
 #   10) Do blocks in code generator
 #   11) in lab  5 i just do parser
+#   12) a = b dont work -- FUCK
