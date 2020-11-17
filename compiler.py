@@ -284,12 +284,13 @@ class Parser:
 
     def expr(self):
         if self.token.type == Lexer.ID:
-            var = self.token.value
+            # var = self.token.value
+            var = self.cond_expr()  # should return id node
             err = (self.token.row, self.token.symbol)
             if self.tokens[0].type == Lexer.EQUAL:
                 self.next_token()
                 self.next_token()
-                return Node(Parser.EXPR, op1=self.expr(), value=var, err=err)
+                return Node(Parser.EXPR, op2=self.expr(), op1=var, err=err)
             elif self.tokens[0].type == Lexer.XOR:
                 self.next_token()
                 self.next_token()
@@ -528,7 +529,7 @@ END main''']
                     if self.scope:
                         for i in self.scope:
                             if elem.value in i.keys():
-                                return str('[ebp - {}]'.format(self.var_map[elem.value][0]))
+                                return str('[ebp - {}]'.format(i[elem.value][0]))
                     print('Use var {} before assignment'.format(elem.value))
                     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
                     sys.exit(1)
@@ -563,40 +564,56 @@ END main''']
                 self.compile(node.op1)
                 self.CALLS.append(self.name + ' endp\n')
 
+        # elif node.kind == Parser.EXPR:
+        #     index = None
+        #     if node.value:
+        #         if node.value not in self.var_map.keys():
+        #             if self.scope:
+        #                 print(self.scope, self.var_map)
+        #                 for i in self.scope[-1:]:
+        #                     print(i)
+        #                     if node.value not in i.keys():
+        #                         print("Use var {} before assignment".format(node.value))
+        #                         print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
+        #                         sys.exit(1)
+        #                     else:
+        #                         self.ttype = i[node.value][1]
+        #                         index = i[node.value][0]
+        #                         break
+        #             else:
+        #                 print("Use var {} before assignment".format(node.value))
+        #                 print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
+        #                 sys.exit(1)
+        #         else:
+        #             index = self.var_map[node.value][0]
+        #             self.ttype = self.var_map[node.value][1]
+        #         self.current_var = node.value
+        #         self.compile(node.op1)
+        #         self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(index))
+        #         self.ttype = None
+        #         self.current_var = None
+        #     else:
+        #         self.compile(node.op1)
+
         elif node.kind == Parser.EXPR:
-            index = None
-            if node.value:
-                if node.value not in self.var_map.keys():
-                    if self.scope:
-                        print(self.scope, self.var_map)
-                        for i in self.scope[-1:]:
-                            print(i)
-                            if node.value not in i.keys():
-                                print("Use var {} before assignment".format(node.value))
-                                print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-                                sys.exit(1)
-                            else:
-                                self.ttype = i[node.value][1]
-                                index = i[node.value][0]
-                                break
-                    else:
-                        print("Use var {} before assignment".format(node.value))
-                        print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-                        sys.exit(1)
-                else:
-                    index = self.var_map[node.value][0]
-                    self.ttype = self.var_map[node.value][1]
-                self.current_var = node.value
+            if node.op1.kind != Parser.ID:
                 self.compile(node.op1)
-                self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(index))
+            else:
+                self.ttype = 2
+                self.current_var = node.op1.value
+                # todo define is really good but sometimes it is not best decision to use
+                if node.op2.kind == Parser.ID:
+                    self.CODE.append("\tmov eax, {}\n\tpush eax\n".format(define(node.op2)))
+                else:
+                    self.compile(node.op2)
                 self.ttype = None
                 self.current_var = None
-            else:
-                self.compile(node.op1)
+                self.CODE.append('\tpop eax\n\tmov dword ptr {}, eax\n'.format(define(node.op1)))
 
         elif node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
             self.counter += 4
+            # todo define what does it mean
             node.op1.ttype = node.ttype
             self.current_var = node.op1.value
             self.compile(node.op1)  # Add var into var_map
@@ -783,4 +800,5 @@ if __name__ == '__main__':
 #   9) !(a=0) and !(a) works ugly --> also code gen problem
 #   10) Do blocks in code generator
 #   11) in lab  5 i just do parser
-#   12) a = b dont work -- FUCK
+#   12) a = b dont work -- FIX
+#   13) ugly type checking  float == int; check if int a; {int a = a;} works? ckeck for code gen for inner blocks
