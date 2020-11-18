@@ -479,7 +479,7 @@ class Compile:
         self.scope = []
         self.counter = 0
         self.ttype = None
-        self.current_var = None
+        self.current_var = None  # we need it just to make correct errors! and it is all!
 
     HEAD = ['.386\n', '.model flat,stdcall\n', 'option casemap:none\n', 'include     D:\masm32\include\windows.inc\n',
             'include     D:\masm32\include\kernel32.inc\n', 'include     D:\masm32\include\masm32.inc\n',
@@ -517,6 +517,21 @@ END main''']
             self.compile(i)
 
     def compile(self, node):
+        def get_type(id):
+            if id not in self.var_map.keys():
+                if self.scope:
+                    for i in self.scope[::-1]:
+                        if id in i.keys():
+                            var_type = i[id][1]
+                            index = i[id][0]
+                            return var_type
+                else:
+                    sys.exit("529")
+            elif id in self.var_map:
+                return self.var_map[id][1]
+            else:
+                sys.exit("533")
+
         def define(elem):
             # This function should be called just for CONST and ID
             if elem.kind == Parser.CONST:
@@ -527,21 +542,29 @@ END main''']
                     sys.exit(1)
                 return str(elem.value)
             else:
+                var_type = None
+                index = 0
                 if elem.value not in self.var_map.keys():
-                    # print(self.scope, self.var_map)
                     if self.scope:
                         for i in self.scope[::-1]:
                             if elem.value in i.keys():
-                                # todo this should not return before check float point
-                                return str('[ebp - {}]'.format(i[elem.value][0]))
-                    print('Use var {} before assignment'.format(elem.value))
-                    print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
-                    sys.exit(1)
-                if self.ttype not in (Lexer.FLOAT, None) and self.var_map[elem.value][1] == Lexer.FLOAT:
+                                var_type = i[elem.value][1]
+                                index = i[elem.value][0]
+                                break
+                                # return str('[ebp - {}]'.format(i[elem.value][0]))
+                    if var_type is None:
+                        print('Use var {} before assignment'.format(elem.value))
+                        print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
+                        sys.exit(1)
+                else:
+                    var_type = self.var_map[elem.value][1]
+                    index = self.var_map[elem.value][0]
+                    # todo define if None is really neccessary
+                if self.ttype not in (Lexer.FLOAT, None) and var_type == Lexer.FLOAT:
                     print("cant assign int var {} to float".format(self.current_var))
                     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
                     sys.exit(1)
-                return str('[ebp - {}]'.format(self.var_map[elem.value][0]))
+                return str('[ebp - {}]'.format(index))
 
         if node.kind == Parser.PROG:
             if isinstance(node.op1, Iterable):
@@ -603,8 +626,9 @@ END main''']
             if node.op1.kind != Parser.ID:
                 self.compile(node.op1)
             else:
-                self.ttype = 2
+                store_type = self.ttype
                 self.current_var = node.op1.value
+                self.ttype = get_type(node.op1.value)
                 # todo define is really good but sometimes it is not best decision to use
                 if node.op2.kind == Parser.ID:
                     self.CODE.append("\tmov eax, {}\n\tpush eax\n".format(define(node.op2)))
@@ -617,24 +641,21 @@ END main''']
         elif node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
             self.counter += 4
-            # todo define what does it mean
+            # node ttype is a TYPE of declaration but it should store in var_map -> Node.ID should have it
             node.op1.ttype = node.ttype
             self.current_var = node.op1.value
             self.compile(node.op1)  # Add var into var_map
             if node.op2:
-
+                self.ttype = node.ttype
                 if node.op2.kind == Parser.ID:
-                    # sys.exit(str(node.op2.kind))
-                    self.ttype = node.ttype
                     self.CODE.append('\tmov eax, {}\n'.format(define(node.op2)))
                     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
                 else:
-                    self.ttype = node.ttype
                     self.compile(node.op2)
-                    self.ttype = None
                     self.current_var = None
                     self.CODE.append("\tpop eax\n")
                     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
+                self.ttype = None
             else:
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
 
@@ -800,6 +821,7 @@ if __name__ == '__main__':
 #   4) make real tests cause if some hotfixes is needed it should be tested fast.
 #   6) should found better solution to parse TERNARY into CODE GEN
 #   ---------------------------------------------------------------------------------
-#   9) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push)
+#   9) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push) --> cant reproduce today
 #   11) in lab  5 i just do parser
-#   13) ugly type checking  float == int; !!!!!!!!!!!!!!!!!!!!
+#   13) ugly type checking  float == int; !!!!!!!!!!!!!!!!!!!! ---> FIX IT but wanna check more
+#   14) we should always return only int --> just think about it
