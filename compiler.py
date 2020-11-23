@@ -142,7 +142,8 @@ class Parser:
                             else:
                                 self.next_token()
                                 continue
-                n.value = params
+                n.args = params
+                n.value = name
                 return n
             else:
                 return None
@@ -344,10 +345,6 @@ class Parser:
                 msg = "Raise error in 263 line\n"
                 msg += "row: " + str(self.token.row - 1)
                 self.error(msg + " semicolon expected")
-            if 'return' not in self.stmts.keys():
-                self.stmts['return'] = n
-            else:
-                n = self.stmts['return']
             return n
         elif self.token.type == Lexer.LBRA:
             self.next_token()
@@ -476,6 +473,8 @@ class Compile:
         self.program = []
         self.name = None
         self.var_map = {}
+        self.func_map = {}
+        self.announcement = {}
         self.scope = []
         self.counter = 0
         self.ttype = None
@@ -488,7 +487,7 @@ class Compile:
 
     DATA = ['.data\n', 'zero_div_msg db \'zero division\', 0\n', 'buff        db 11 dup(?)\n']
 
-    CODE = ['.code\n', 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
+    CODE = ['.code\n']  # , 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
 
     CALLS = ['\tmov esp, ebp\n\tpop ebp\ninvoke  NumbToStr, ebx, ADDR buff\n', 'invoke  StdOut,eax\n',
              'invoke  ExitProcess, 0\n', '\nerror:\n\tinvoke StdOut, addr zero_div_msg\n\tinvoke ExitProcess, 1\n\n']
@@ -573,23 +572,94 @@ END main''']
                 self.compile(node.op1)
 
         elif node.kind == Parser.FUNC:
-            self.name = node.value
-            if self.name == "main":
-                ret = False
-                for i in node.op1:
-                    if i.kind == Parser.RET:
-                        ret = True
-                        break
-                if not ret:
-                    self.CALLS = self.CALLS[2:]
-                self.iter_compile(node.op1)
+            func_name = node.value
+            self.var_map = {}
+            self.counter = 0
+            if func_name not in self.func_map.keys():
+                if func_name in self.announcement.keys():
+                    if len(node.args) != len(self.announcement[func_name]):
+                        sys.exit("args don't equals")
+                    elif node.args:
+                        for i in range(len(node.args)):
+                            if node.args[i][1] != self.announcement[func_name][i][1]:
+                                sys.exit("bad types in announcement ")
+                self.func_map.update({node.value: node.args})
+                ########################################
+
+                if func_name == 'main':
+                    self.CODE.append('{}:\n'.format(func_name))
+                    self.CODE.append('\txor eax, eax\n'
+                                     '\txor ebx, ebx\n'
+                                     '\txor ecx, ecx\n')
+                    self.iter_compile(node.op1)
+                else:
+                    self.CODE.append('my_{}:\n'.format(func_name))
+                    self.CODE.append('\tpush ebp\n'
+                                     '\tmov ebp, esp\n')
+                    self.iter_compile(node.op1)
+                    self.CODE.append('\tmov ebp, esp\n'
+                                     '\tpop ebp\n'
+                                     '\tret\n')
             else:
-                self.name = 'my_' + self.name
-                self.HEAD.append(self.name + '\t')
-                self.HEAD.append("proto\n")
-                self.CALLS.append(self.name + ' proc\n')
-                self.compile(node.op1)
-                self.CALLS.append(self.name + ' endp\n')
+                sys.exit("604")
+
+        elif node.kind == Parser.ANNOUNCEMENT:
+            if node.value not in self.announcement.keys():
+                self.announcement.update({node.value: node.args})
+            else:
+                sys.exit("586")
+
+        elif node.kind == Parser.CALL:
+            func_name = node.value
+            if func_name not in self.func_map.keys():
+                if func_name not in self.announcement.keys():
+                    sys.exit("call unknown function")
+                else:
+                    if len(node.args) != len(self.announcement[func_name]):
+                        sys.exit("args don't equals")
+                    elif node.args:
+                        for i in range(len(node.args)):
+                            if node.args[i][1] != self.announcement[func_name][i][1]:
+                                sys.exit("bad types in announcement ")
+            else:
+                if len(node.args) != len(self.func_map[func_name]):
+                    sys.exit("args don't equals")
+                elif node.args:
+                    for i in range(len(node.args)):
+                        if node.args[i].kind == Parser.CONST:
+                            t_type = node.args[i].ttype
+                        elif node.args[i].kind == Parser.ID:
+                            t_type = get_type(node.args[i].value)
+                        else:
+                            sys.exit("args should be const or var")
+                        if t_type != self.func_map[func_name][i][1]:
+                            sys.exit("bad types in call")
+            ####################################
+            num = len(node.args) * 4
+            if node.args:
+                for i in node.args[::-1]:
+                    self.CODE.append("\tpush {}\n".format(define(i)))
+            # if node.value == "main"    -------------------- just to think
+            
+            self.CODE.append('\tcall my_{}\n'.format(node.value))
+            self.CODE.append('\tadd esp, {}\n'.format(num))
+
+            # if self.name == "main":
+            #     ret = False
+            #     for i in node.op1:
+            #         if i.kind == Parser.RET:
+            #             ret = True
+            #             break
+            #     if not ret:
+            #         self.CALLS = self.CALLS[2:]
+            #     self.iter_compile(node.op1)
+            # else:
+            #     self.name = 'my_' + self.name
+            #     self.HEAD.append(self.name + '\t')
+            #     self.HEAD.append("proto\n")
+            #     self.CALLS.append(self.name + ' proc\n')
+            #     self.compile(node.op1)
+            #     self.CALLS.append(self.name + ' endp\n')
 
         # elif node.kind == Parser.EXPR:
         #     index = None
@@ -819,9 +889,12 @@ if __name__ == '__main__':
 #   2) error messages are ugly through all code, many bugs
 #   3) If there are more then one return statement
 #   4) make real tests cause if some hotfixes is needed it should be tested fast.
-#   6) should found better solution to parse TERNARY into CODE GEN
-#   ---------------------------------------------------------------------------------
-#   9) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push) --> cant reproduce today
-#   11) in lab  5 i just do parser
-#   13) ugly type checking  float == int; !!!!!!!!!!!!!!!!!!!! ---> FIX IT but wanna check more
-#   14) we should always return only int --> just think about it
+#   5) should found better solution to parse TERNARY into CODE GEN
+#   6) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push) --> cant reproduce today
+#   7) ugly type checking  float == int; !!!!!!!!!!!!!!!!!!!! ---> FIX IT but wanna check more
+#   8) we should always "return" only int --> just think about it
+#   ------------------------------------------------------------------------------
+#   9) "main" function with no params and it shouldnt be called
+#   10) bad work of 'return' -> it should always move result in eax and after main is end we should move ebx, eax
+#   11) if we have no DIV dont use error in asm for it
+#   12) check if it just work
