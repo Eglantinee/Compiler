@@ -592,12 +592,14 @@ END main''']
                                      '\txor ebx, ebx\n'
                                      '\txor ecx, ecx\n')
                     self.iter_compile(node.op1)
+                    self.CODE.append('\tpop ebx\n')
                 else:
                     self.CODE.append('my_{}:\n'.format(func_name))
                     self.CODE.append('\tpush ebp\n'
                                      '\tmov ebp, esp\n')
                     self.iter_compile(node.op1)
-                    self.CODE.append('\tmov ebp, esp\n'
+                    self.CODE.append('\tpop eax\n'
+                                     '\tmov ebp, esp\n'
                                      '\tpop ebp\n'
                                      '\tret\n')
             else:
@@ -701,12 +703,16 @@ END main''']
                 self.ttype = get_type(node.op1.value)
                 # todo define is really good but sometimes it is not best decision to use
                 if node.op2.kind == Parser.ID:
-                    self.CODE.append("\tmov eax, {}\n\tpush eax\n".format(define(node.op2)))
+                    self.CODE.append("\tmov eax, {}\n".format(define(node.op2)))
+                elif node.op2.kind == Parser.CALL:
+                    self.compile(node.op2)
                 else:
                     self.compile(node.op2)
+                    self.CODE.append('\tpop eax\n')
+                self.CODE.append('\tmov dword ptr {}, eax\n'.format(define(node.op1)))
                 self.ttype = None
                 self.current_var = None
-                self.CODE.append('\tpop eax\n\tmov dword ptr {}, eax\n'.format(define(node.op1)))
+
 
         elif node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
@@ -776,25 +782,25 @@ END main''']
             counter -= 1
 
         elif node.kind == Parser.RET:
-            if self.name == "main":
-                if node.op1.kind not in (Parser.CONST, Parser.ID):
-                    self.compile(node.op1)
-                    self.CODE.append('\tpop ebx\n')
-                else:
-                    self.CODE.append("\tmov ebx, {}\n".format(define(node.op1)))
-            else:
-                self.CALLS.append('\tmov ebx, ')
+            if node.op1.kind not in (Parser.CONST, Parser.ID):
                 self.compile(node.op1)
-                self.CALLS.append("\tret\n")
+                # self.CODE.append('\tpop ebx\n')
+            else:
+                self.CODE.append("\tmov eax, {}\n".format(define(node.op1)))
+                self.CODE.append('\tpush eax\n')
 
         elif node.kind == Parser.BIN_PROD:
             def multiple():
-                self.CODE.append('\tpop ecx\n\tpop eax\n\tmul ecx\n\tpush eax\n')
+                self.CODE.append('\tpop ecx\n'
+                                 '\tpop eax\n'
+                                 '\tmul ecx\n'
+                                 '\tpush eax\n')
 
             k = 0
             for i in node.op1:
                 if i.kind in (Parser.CONST, Parser.ID):
-                    self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
+                    self.CODE.append('\tmov eax, {}\n'
+                                     '\tpush eax\n'.format(define(i)))
                     k += 1
                 else:
                     self.compile(i)
@@ -895,6 +901,6 @@ if __name__ == '__main__':
 #   8) we should always "return" only int --> just think about it
 #   ------------------------------------------------------------------------------
 #   9) "main" function with no params and it shouldnt be called
-#   10) bad work of 'return' -> it should always move result in eax and after main is end we should move ebx, eax
+#   10) bad work of 'return' -> it should always move result in eax and after main is end we should move ebx, eax   --------------- MB DONE
 #   11) if we have no DIV dont use error in asm for it
-#   12) check if it just work
+#   12) parameters into function
