@@ -502,7 +502,7 @@ class Compile:
              '\tinvoke  StdOut,eax\n',
              '\tinvoke  ExitProcess, 0\n']
 
-    END = ['NumbToStr PROC uses ebx x:DWORD, buffer:DWORD '
+    END = ['\nNumbToStr PROC uses ebx x:DWORD, buffer:DWORD\n'
            '\tmov ecx, buffer\n'
            '\tmov eax, x\n'
            '\tmov ebx, 10\n'
@@ -573,7 +573,7 @@ class Compile:
                     print("cant assign int var {} to float".format(self.current_var))
                     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
                     sys.exit(1)
-                return str('[ebp - {}]'.format(index))
+                return str('[ebp - {}]'.format(index) if index > 0 else '[ebp + {}]'.format(-index))
 
         if node.kind == Parser.PROG:
             if isinstance(node.op1, Iterable):
@@ -584,7 +584,7 @@ class Compile:
         elif node.kind == Parser.FUNC:
             func_name = node.value
             self.var_map = {}
-            self.counter = 0 if func_name == 'main' else 8
+            # self.counter = 0 if func_name == 'main' else 8
             if func_name not in self.func_map.keys():
                 if func_name in self.announcement.keys():
                     if len(node.args) != len(self.announcement[func_name]):
@@ -595,11 +595,8 @@ class Compile:
                                 sys.exit("bad types in announcement ")
                 self.func_map.update({node.value: node.args})
                 ########################################
-                if node.args:
-                    for i in node.args:
-                        self.var_map.update({i[0]: (self.counter, i[1], node.err)})
-                        self.counter += 4
                 if func_name == 'main':
+                    self.counter = 0
                     if node.args:
                         sys.exit("main should be without args")
                     self.CODE.append('{}:\n'.format(func_name))
@@ -613,12 +610,18 @@ class Compile:
                     self.CODE.append('\tmov esp, ebp\n'
                                      '\tpop ebp\n')
                 else:
+                    self.counter = - 8
+                    if node.args:
+                        for i in node.args:
+                            self.var_map.update({i[0]: (self.counter, i[1], node.err)})
+                            self.counter -= 4
+                    self.counter = 0
                     self.CODE.append('my_{}:\n'.format(func_name))
                     self.CODE.append('\tpush ebp\n'
                                      '\tmov ebp, esp\n')
                     self.iter_compile(node.op1)
                     self.CODE.append('\tpop eax\n'
-                                     '\tmov ebp, esp\n'
+                                     '\tmov esp, ebp\n'
                                      '\tpop ebp\n'
                                      '\tret\n')
             else:
@@ -729,6 +732,7 @@ class Compile:
                     self.compile(node.op2)
                     self.CODE.append('\tpop eax\n')
                 self.CODE.append('\tmov dword ptr {}, eax\n'.format(define(node.op1)))
+                self.CODE.append('\tpush eax\n')
                 self.ttype = None
                 self.current_var = None
 
@@ -942,7 +946,6 @@ if __name__ == '__main__':
 #   10) bad work of 'return' -> it should always move result in eax and after main is end we should move ebx, eax   --------------- MB DONE
 #   13) we actually don't need self CALLS because it can be add after main by them selves
 #   ------------------------------------------------------------------------------
-#   12) parameters into function
-#   13) test if code_gen works
-#   14) exor -> just check
+#   13) Error messages
+#   14) Code_gen push pop is a big problem!!!
 
