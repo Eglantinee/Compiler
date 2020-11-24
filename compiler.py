@@ -290,19 +290,20 @@ class Parser:
             # var = self.cond_expr()  # should return id node
             # todo it is really broken -- if we run self.cond_epr it wont work but I would like it to be done
             var = Node(Parser.ID, value=self.token.value)
+            var_tok = self.token
             err = (self.token.row, self.token.symbol)
             if self.tokens[0].type == Lexer.EQUAL:
                 self.next_token()
                 self.next_token()
                 return Node(Parser.EXPR, op2=self.expr(), op1=var, err=err)
-            elif self.tokens[0].type == Lexer.XOR:
+            elif self.tokens[0].type == Lexer.XOR and self.tokens[1].type == Lexer.EQUAL:
+                new_xor = self.tokens[0]
                 self.next_token()
                 self.next_token()
-                if self.token.type == Lexer.EQUAL:
-                    self.next_token()
-                    return Node(Parser.EXOR, op1=self.expr(), value=var, err=err)
-                else:
-                    sys.exit("279")
+                self.tokens.insert(0, new_xor)
+                self.tokens.insert(0, var_tok)
+                self.next_token()
+                return Node(Parser.EXPR, op2=self.expr(), op1=var, err=err)
             else:
                 return self.cond_expr()
         else:
@@ -342,6 +343,7 @@ class Parser:
             n.op1 = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
+                print(self.token, self.tokens[0])
                 msg = "Raise error in 263 line\n"
                 msg += "row: " + str(self.token.row - 1)
                 self.error(msg + " semicolon expected")
@@ -468,6 +470,7 @@ class Parser:
 
 class Compile:
     def __init__(self):
+        self.div_flag = False
         self.if_counter = 0
         self.nested = [False, 0]
         self.program = []
@@ -480,36 +483,43 @@ class Compile:
         self.ttype = None
         self.current_var = None  # we need it just to make correct errors! and it is all!
 
-    HEAD = ['.386\n', '.model flat,stdcall\n', 'option casemap:none\n', 'include     D:\masm32\include\windows.inc\n',
-            'include     D:\masm32\include\kernel32.inc\n', 'include     D:\masm32\include\masm32.inc\n',
-            'includelib    D:\masm32\lib\kernel32.lib\n', 'includelib    D:\masm32\lib\masm32.lib\n',
-            'NumbToStr    PROTO: DWORD,:DWORD\n']
+    HEAD = ['.386\n'
+            '.model flat,stdcall\n'
+            'option casemap: none\n'
+            'include D:\\masm32\\include\\windows.inc\n'
+            'include D:\\masm32\\include\\kernel32.inc\n'
+            'include D:\\masm32\\include\\masm32.inc\n'
+            'includelib D:\\masm32\\lib\\kernel32.lib\n'
+            'includelib D:\\masm32\\lib\\masm32.lib\n'
+            'NumbToStr PROTO: DWORD,:DWORD\n']
 
-    DATA = ['.data\n', 'zero_div_msg db \'zero division\', 0\n', 'buff        db 11 dup(?)\n']
+    DATA = ['\n.data\n'
+            'buff db 11 dup(?)\n']
 
-    CODE = ['.code\n']  # , 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
+    CODE = ['\n.code\n']  # , 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
 
-    CALLS = ['\tmov esp, ebp\n\tpop ebp\ninvoke  NumbToStr, ebx, ADDR buff\n', 'invoke  StdOut,eax\n',
-             'invoke  ExitProcess, 0\n', '\nerror:\n\tinvoke StdOut, addr zero_div_msg\n\tinvoke ExitProcess, 1\n\n']
+    CALLS = ['\tinvoke  NumbToStr, ebx, ADDR buff\n',
+             '\tinvoke  StdOut,eax\n',
+             '\tinvoke  ExitProcess, 0\n']
 
-    END = ['''NumbToStr PROC uses ebx x:DWORD, buffer:DWORD
-    mov     ecx, buffer
-    mov     eax, x
-    mov     ebx, 10
-    add     ecx, ebx
-@@:
-    xor     edx, edx
-    div     ebx
-    add     edx, 48              	
-    mov     BYTE PTR [ecx],dl   	
-    dec     ecx                 	
-    test    eax, eax
-    jnz     @b
-    inc     ecx
-    mov     eax, ecx
-    ret
-NumbToStr ENDP
-END main''']
+    END = ['NumbToStr PROC uses ebx x:DWORD, buffer:DWORD '
+           '\tmov ecx, buffer\n'
+           '\tmov eax, x\n'
+           '\tmov ebx, 10\n'
+           '\tadd ecx, ebx\n'
+           '@@:\n'
+           '\txor edx, edx\n'
+           '\tdiv ebx\n'
+           '\tadd edx, 48\n'
+           '\tmov BYTE PTR [ecx], dl\n'
+           '\tdec ecx\n'
+           '\ttest eax, eax\n'
+           '\tjnz @b\n'
+           '\tinc ecx\n'
+           '\tmov eax, ecx\n'
+           '\tret\n'
+           'NumbToStr ENDP\n'
+           'END main\n']
 
     def iter_compile(self, lst):
         for i in lst:
@@ -574,7 +584,7 @@ END main''']
         elif node.kind == Parser.FUNC:
             func_name = node.value
             self.var_map = {}
-            self.counter = 0
+            self.counter = 0 if func_name == 'main' else 8
             if func_name not in self.func_map.keys():
                 if func_name in self.announcement.keys():
                     if len(node.args) != len(self.announcement[func_name]):
@@ -585,14 +595,23 @@ END main''']
                                 sys.exit("bad types in announcement ")
                 self.func_map.update({node.value: node.args})
                 ########################################
-
+                if node.args:
+                    for i in node.args:
+                        self.var_map.update({i[0]: (self.counter, i[1], node.err)})
+                        self.counter += 4
                 if func_name == 'main':
+                    if node.args:
+                        sys.exit("main should be without args")
                     self.CODE.append('{}:\n'.format(func_name))
+                    self.CODE.append('\tpush ebp\n'
+                                     '\tmov ebp, esp\n')
                     self.CODE.append('\txor eax, eax\n'
                                      '\txor ebx, ebx\n'
                                      '\txor ecx, ecx\n')
                     self.iter_compile(node.op1)
                     self.CODE.append('\tpop ebx\n')
+                    self.CODE.append('\tmov esp, ebp\n'
+                                     '\tpop ebp\n')
                 else:
                     self.CODE.append('my_{}:\n'.format(func_name))
                     self.CODE.append('\tpush ebp\n'
@@ -603,13 +622,13 @@ END main''']
                                      '\tpop ebp\n'
                                      '\tret\n')
             else:
-                sys.exit("604")
+                sys.exit("608")
 
         elif node.kind == Parser.ANNOUNCEMENT:
             if node.value not in self.announcement.keys():
                 self.announcement.update({node.value: node.args})
             else:
-                sys.exit("586")
+                sys.exit("614")
 
         elif node.kind == Parser.CALL:
             func_name = node.value
@@ -698,10 +717,10 @@ END main''']
             if node.op1.kind != Parser.ID:
                 self.compile(node.op1)
             else:
-                store_type = self.ttype
+                # store_type = self.ttype
                 self.current_var = node.op1.value
                 self.ttype = get_type(node.op1.value)
-                # todo define is really good but sometimes it is not best decision to use
+                # todo "define" is really good but sometimes it is not best decision to use
                 if node.op2.kind == Parser.ID:
                     self.CODE.append("\tmov eax, {}\n".format(define(node.op2)))
                 elif node.op2.kind == Parser.CALL:
@@ -809,8 +828,16 @@ END main''']
                     multiple()
 
         elif node.kind == Parser.BIN_DIV:
+            self.div_flag = True
+
             def multiple():
-                self.CODE.append('\tpop ecx\n\tcmp ecx, 0\n\tje error\n\tpop eax\n\tcdq\n\tidiv ecx\n\tpush eax\n')
+                self.CODE.append('\tpop ecx\n'
+                                 '\tcmp ecx, 0\n'
+                                 '\tje error\n'
+                                 '\tpop eax\n'
+                                 '\tcdq\n'
+                                 '\tidiv ecx\n'
+                                 '\tpush eax\n')
 
             err = node.err
             k = 0
@@ -830,7 +857,10 @@ END main''']
 
         elif node.kind == Parser.BIN_XOR:
             def multiple():
-                self.CODE.append('\tpop ecx\n\tpop eax\n\txor eax, ecx\n\tpush eax\n')
+                self.CODE.append('\tpop ecx\n'
+                                 '\tpop eax\n'
+                                 '\txor eax, ecx\n'
+                                 '\tpush eax\n')
 
             k = 0
             for i in node.op1:
@@ -842,6 +872,11 @@ END main''']
                     k += 1
                 if k >= 2:
                     multiple()
+
+        # elif node.kind == Parser.EXOR:
+        #     var = node.value
+        #     if node.op1.kind == Parser.ID:
+        #         self.CODE.append("\tmov eax, {}\n".format(define(node.op1)))
         elif node.kind == Parser.UNOP:
             if node.op1.kind not in (Parser.CONST, Parser.ID):
                 self.compile(node.op1)
@@ -870,6 +905,11 @@ END main''']
 
     def printer(self):
         f = open('output.asm', 'w')
+        if self.div_flag:
+            self.DATA.append('zero_div_msg db \'zero division\', 0\n')
+            self.CALLS.append('\nerror:\n'
+                              '\tinvoke StdOut, addr zero_div_msg\n'
+                              '\tinvoke ExitProcess, 1\n\n')
         self.CODE.extend(self.CALLS)
         self.program += self.HEAD
         self.program += self.DATA
@@ -899,8 +939,10 @@ if __name__ == '__main__':
 #   6) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push) --> cant reproduce today
 #   7) ugly type checking  float == int; !!!!!!!!!!!!!!!!!!!! ---> FIX IT but wanna check more
 #   8) we should always "return" only int --> just think about it
-#   ------------------------------------------------------------------------------
-#   9) "main" function with no params and it shouldnt be called
 #   10) bad work of 'return' -> it should always move result in eax and after main is end we should move ebx, eax   --------------- MB DONE
-#   11) if we have no DIV dont use error in asm for it
+#   13) we actually don't need self CALLS because it can be add after main by them selves
+#   ------------------------------------------------------------------------------
 #   12) parameters into function
+#   13) test if code_gen works
+#   14) exor -> just check
+
