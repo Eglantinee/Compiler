@@ -2,7 +2,7 @@ from compiler import Lexer
 
 names = (
     'NUM', 'ID', 'INT', 'FLOAT', 'LBRA', 'RBRA', 'RETURN', 'LPAR', 'RPAR', 'SEMICOLON', 'NOT', 'PROD', 'EQUAL', 'XOR',
-    'DIV', 'EOF', 'QUESTION', 'COLON', 'COMMA')
+    'DIV', 'EOF', 'QUESTION', 'COLON', 'COMMA',  'QUOTE', 'CHAR', 'LESS', 'MORE', 'SYMBOL')
 
 file = 'lab1.c'
 lex = Lexer(file)

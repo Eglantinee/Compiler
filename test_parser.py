@@ -39,6 +39,10 @@ def tree_ast(ast, n):
         #     print("")
         # if ast.op3.op1 is not None:
         tree_ast(ast.op3, n + 3)
+    if ast.args:
+        print(' ' * 2 * (n+1), "args:")
+        for i in ast.args:
+            print(' ' * 2 * (n + 2), i)
     if isinstance(ast.op1, Iterable):
         for i in ast.op1:
             tree_ast(i, n + 1)

@@ -17,15 +17,14 @@ class Lexer:
                                 defaults=(self.value,))
 
     NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON, \
-    COMMA = range(19)
+    COMMA, QUOTE, CHAR, LESS, MORE, SYMBOL = range(24)
     SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
-               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA}
-    WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT}
+               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA, "'": QUOTE, '>': MORE, '<': LESS}
+    WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT, 'char': CHAR}
 
     def get(self):
         self.symbol += 1
         self.st = self.file.read(1)
-        self.file.seek(self.file.tell())
 
     def next_token(self):
         self.value = None
@@ -40,8 +39,31 @@ class Lexer:
                     self.symbol = 0
                 self.get()
             elif self.st.decode() in Lexer.SYMBOLS:
-                self.tokens.append(self.Token(True, Lexer.SYMBOLS[self.st.decode()], self.row, self.symbol))
-                self.get()
+                sym = Lexer.SYMBOLS[self.st.decode()]
+                if sym == Lexer.DIV:
+                    pos = self.file.tell()
+                    self.get()
+                    if self.st.decode() == '/':
+                        self.file.readline()
+                        self.get()
+                    elif self.st.decode() == "*":
+                        self.get()
+                        while True:
+                            if len(self.st) == 0:
+                                break
+                            elif self.st.decode() == '*':
+                                self.get()
+                                if self.st.decode() == "/":
+                                    self.get()
+                                    break
+                            self.get()
+                    else:
+                        self.file.seek(pos)
+                        self.tokens.append(self.Token(True, sym, self.row, self.symbol))
+                        self.get()
+                else:
+                    self.tokens.append(self.Token(True, Lexer.SYMBOLS[self.st.decode()], self.row, self.symbol))
+                    self.get()
             elif self.st.isdigit():
                 k = "int"
                 tmp_str = b''
@@ -74,6 +96,9 @@ class Lexer:
                     self.tokens.append(self.Token(True, Lexer.WORDS[ident], self.row, self.symbol - len(ident)))
                 else:
                     self.tokens.append(self.Token(True, Lexer.ID, self.row, self.symbol - len(ident), value=ident))
+            elif self.st.decode() in [chr(i) for i in range(256)]:
+                self.tokens.append(self.Token(True, Lexer.SYMBOL, self.row, self.symbol - 1, value=self.st.decode()))
+                self.get()
             else:
                 self.tokens.append(self.Token(False, None, self.row, self.symbol))
                 self.get()
@@ -200,6 +225,25 @@ class Parser:
             return n
         elif self.token.type == Lexer.ID:
             return Node(Parser.ID, value=self.token.value, err=(self.token.row, self.token.symbol))
+        elif self.token.type == Lexer.QUOTE:
+            self.next_token()
+            n = None
+            if self.token.type in Lexer.SYMBOLS.values():
+                for k, v in Lexer.SYMBOLS.items():
+                    if v == self.token.type:
+                        n = Node(Parser.CONST, value=ord(k), ttype='int') # todo maybe we should get code and cmp with 255
+                        break
+            elif self.token.type == Lexer.SYMBOL:
+                n = Node(Parser.CONST, value=ord(self.token.value), ttype='int')
+            if self.token.type == Lexer.NUM:
+                if len(self.token.value[0]) == 1:
+                    n = Node(Parser.CONST, value=ord(self.token.value[0].decode()), ttype='int')
+            if n is None:
+                sys.exit("char expected")
+            self.next_token()
+            if self.token.type != Lexer.QUOTE:
+                sys.exit("QUOTE expected")
+            return n
         else:
             msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
             self.error(msg)
@@ -310,7 +354,7 @@ class Parser:
             return self.cond_expr()
 
     def declaration(self):
-        if self.token.type in (Lexer.INT, Lexer.FLOAT):
+        if self.token.type in (Lexer.INT, Lexer.FLOAT, Lexer.CHAR):
             ttype = self.token.type
             self.next_token()
             if self.token.type == Lexer.ID:
@@ -375,7 +419,7 @@ class Parser:
 
     def block_item(self):
         # todo it is simple fix but it is not the best variant cuz in declaration is the same code
-        if self.token.type in (Lexer.FLOAT, Lexer.INT):
+        if self.token.type in (Lexer.FLOAT, Lexer.INT, Lexer.CHAR):
             return self.declaration()
         else:
             return self.statement()
@@ -392,14 +436,14 @@ class Parser:
                     args = []
                     # todo it this eta i don't understand which format i should use to store info about arguments
                     while True:
-                        if self.token.type in (Lexer.FLOAT, Lexer.INT):
+                        if self.token.type in (Lexer.FLOAT, Lexer.INT, Lexer.CHAR):
                             ttype = self.token.type
                             self.next_token()
                             if self.token.type == Lexer.ID:
                                 args.append((self.token.value, ttype))
                                 self.next_token()
                                 if self.token.type == Lexer.COMMA:
-                                    if self.tokens[0].type not in (Lexer.FLOAT, Lexer.INT):
+                                    if self.tokens[0].type not in (Lexer.FLOAT, Lexer.INT, Lexer.CHAR):
                                         sys.exit('368')
                                     else:
                                         self.next_token()
@@ -584,7 +628,6 @@ class Compile:
         elif node.kind == Parser.FUNC:
             func_name = node.value
             self.var_map = {}
-            # self.counter = 0 if func_name == 'main' else 8
             if func_name not in self.func_map.keys():
                 if func_name in self.announcement.keys():
                     if len(node.args) != len(self.announcement[func_name]):
@@ -644,6 +687,7 @@ class Compile:
                     elif node.args:
                         for i in range(len(node.args)):
                             if node.args[i][1] != self.announcement[func_name][i][1]:
+                                print(node.args[i][1])
                                 sys.exit("bad types in announcement ")
             else:
                 if len(node.args) != len(self.func_map[func_name]):
@@ -655,72 +699,30 @@ class Compile:
                         elif node.args[i].kind == Parser.ID:
                             t_type = get_type(node.args[i].value)
                         else:
-                            sys.exit("args should be const or var")
-                        if t_type != self.func_map[func_name][i][1]:
-                            sys.exit("bad types in call")
+                            # sys.exit("args should be const or var")
+                            self.compile(node.args[i])
+                        # if t_type != self.func_map[func_name][i][1]:
+                        #     if t_type == Lexer.CHAR and self.func_map[func_name][i][1] == Lexer.INT:
+                        #         pass
+                        #     # elif:
+                        #     #     t
+                        #     else:
+                        #         print(t_type, self.func_map[func_name][i])
+                        #         sys.exit("bad types in call")
             ####################################
             num = len(node.args) * 4
             if node.args:
                 for i in node.args[::-1]:
                     self.CODE.append("\tpush {}\n".format(define(i)))
             # if node.value == "main"    -------------------- just to think
-            
+
             self.CODE.append('\tcall my_{}\n'.format(node.value))
             self.CODE.append('\tadd esp, {}\n'.format(num))
-
-            # if self.name == "main":
-            #     ret = False
-            #     for i in node.op1:
-            #         if i.kind == Parser.RET:
-            #             ret = True
-            #             break
-            #     if not ret:
-            #         self.CALLS = self.CALLS[2:]
-            #     self.iter_compile(node.op1)
-            # else:
-            #     self.name = 'my_' + self.name
-            #     self.HEAD.append(self.name + '\t')
-            #     self.HEAD.append("proto\n")
-            #     self.CALLS.append(self.name + ' proc\n')
-            #     self.compile(node.op1)
-            #     self.CALLS.append(self.name + ' endp\n')
-
-        # elif node.kind == Parser.EXPR:
-        #     index = None
-        #     if node.value:
-        #         if node.value not in self.var_map.keys():
-        #             if self.scope:
-        #                 print(self.scope, self.var_map)
-        #                 for i in self.scope[-1:]:
-        #                     print(i)
-        #                     if node.value not in i.keys():
-        #                         print("Use var {} before assignment".format(node.value))
-        #                         print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-        #                         sys.exit(1)
-        #                     else:
-        #                         self.ttype = i[node.value][1]
-        #                         index = i[node.value][0]
-        #                         break
-        #             else:
-        #                 print("Use var {} before assignment".format(node.value))
-        #                 print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-        #                 sys.exit(1)
-        #         else:
-        #             index = self.var_map[node.value][0]
-        #             self.ttype = self.var_map[node.value][1]
-        #         self.current_var = node.value
-        #         self.compile(node.op1)
-        #         self.CODE.append('\tpop eax\n\tmov dword ptr [ebp - {}], eax\n'.format(index))
-        #         self.ttype = None
-        #         self.current_var = None
-        #     else:
-        #         self.compile(node.op1)
 
         elif node.kind == Parser.EXPR:
             if node.op1.kind != Parser.ID:
                 self.compile(node.op1)
             else:
-                # store_type = self.ttype
                 self.current_var = node.op1.value
                 self.ttype = get_type(node.op1.value)
                 # todo "define" is really good but sometimes it is not best decision to use
@@ -742,6 +744,7 @@ class Compile:
             self.counter += 4
             # node ttype is a TYPE of declaration but it should store in var_map -> Node.ID should have it
             node.op1.ttype = node.ttype
+            print(node.ttype)
             self.current_var = node.op1.value
             self.compile(node.op1)  # Add var into var_map
             if node.op2:
@@ -877,10 +880,6 @@ class Compile:
                 if k >= 2:
                     multiple()
 
-        # elif node.kind == Parser.EXOR:
-        #     var = node.value
-        #     if node.op1.kind == Parser.ID:
-        #         self.CODE.append("\tmov eax, {}\n".format(define(node.op1)))
         elif node.kind == Parser.UNOP:
             if node.op1.kind not in (Parser.CONST, Parser.ID):
                 self.compile(node.op1)
@@ -896,6 +895,10 @@ class Compile:
                 print("cant assign int var {} to float".format(self.current_var))
                 print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
                 sys.exit(1)
+            elif node.ttype == Lexer.INT and self.ttype == Lexer.CHAR:
+                if node.value > 255:
+                    print('Warning: overflow conversion int to char')
+                    node.value = node.value % 256
             self.CODE.append('\tpush {}\n'.format(node.value))
 
         elif node.kind == Parser.ID:
@@ -948,4 +951,8 @@ if __name__ == '__main__':
 #   ------------------------------------------------------------------------------
 #   13) Error messages
 #   14) Code_gen push pop is a big problem!!!
+#   15) LESS MORE CHAR implementation
+#   16) FUCK i forget about EXPRESSIONS into FUNC PARAMS
+#   17) i do sms with char --> it works fine but int d = 999; char a = d --> should works on other way. the same thing with cahr a = foo();
+#   18) ectually we have many troubles into code_gen_expression
 

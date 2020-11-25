@@ -1,5 +1,9 @@
+int foo(int z){
+    return z;
+}
 int main(){
-float b;
-b ? (a=1): (a=2);
-return b;
+char a = 11;
+int d = 999;
+a = foo(a);
+return d;
 }
