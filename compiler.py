@@ -587,6 +587,7 @@ class Compile:
 
         def define(elem):
             # This function should be called just for CONST and ID
+            # todo we have NO type checking!!!
             if elem.kind == Parser.CONST:
                 if self.ttype not in (Lexer.FLOAT, None) and elem.ttype == Lexer.FLOAT:
                     print("cant assign int var {} to float".format(self.current_var))
@@ -687,7 +688,7 @@ class Compile:
                     elif node.args:
                         for i in range(len(node.args)):
                             if node.args[i][1] != self.announcement[func_name][i][1]:
-                                print(node.args[i][1])
+                                # print(node.args[i][1])
                                 sys.exit("bad types in announcement ")
             else:
                 if len(node.args) != len(self.func_map[func_name]):
@@ -698,22 +699,16 @@ class Compile:
                             t_type = node.args[i].ttype
                         elif node.args[i].kind == Parser.ID:
                             t_type = get_type(node.args[i].value)
-                        else:
-                            # sys.exit("args should be const or var")
-                            self.compile(node.args[i])
-                        # if t_type != self.func_map[func_name][i][1]:
-                        #     if t_type == Lexer.CHAR and self.func_map[func_name][i][1] == Lexer.INT:
-                        #         pass
-                        #     # elif:
-                        #     #     t
-                        #     else:
-                        #         print(t_type, self.func_map[func_name][i])
-                        #         sys.exit("bad types in call")
+                        # else:
+                        #     self.compile(node.args[i])
             ####################################
             num = len(node.args) * 4
             if node.args:
                 for i in node.args[::-1]:
-                    self.CODE.append("\tpush {}\n".format(define(i)))
+                    if i.kind in (Parser.ID, Parser.CONST):
+                        self.CODE.append("\tpush {}\n".format(define(i)))
+                    else:
+                        self.compile(i)
             # if node.value == "main"    -------------------- just to think
 
             self.CODE.append('\tcall my_{}\n'.format(node.value))
@@ -744,7 +739,7 @@ class Compile:
             self.counter += 4
             # node ttype is a TYPE of declaration but it should store in var_map -> Node.ID should have it
             node.op1.ttype = node.ttype
-            print(node.ttype)
+            # print(node.ttype)
             self.current_var = node.op1.value
             self.compile(node.op1)  # Add var into var_map
             if node.op2:
@@ -796,13 +791,13 @@ class Compile:
                 self.nested[0] = True
                 self.nested[1] = self.if_counter
             if node.op3.kind in (Parser.CONST, Parser.ID):
-                print(node.op3.kind)
+                # print(node.op3.kind)
                 self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(node.op3)))
             else:
                 self.compile(node.op3)
             if self.nested[1] == counter:
                 self.nested[0] = False
-            print(self.nested)
+            # print(self.nested)
             if self.nested[0] is False:
                 self.CODE.append("end_if{}:\n".format(counter))
             counter -= 1
@@ -850,10 +845,11 @@ class Compile:
             k = 0
             for i in node.op1:
                 if i.kind in (Parser.CONST, Parser.ID):
-                    if self.ttype not in (Lexer.FLOAT, None):
-                        print("var {} was declared as int but DIV was called".format(self.current_var))
-                        print('Error: row {}, symbol {}'.format(err[0], err[1]))
-                        sys.exit(1)
+                    #  todo remove type checking
+                    # if self.ttype not in (Lexer.FLOAT, None):
+                    #     print("var {} was declared as int but DIV was called".format(self.current_var))
+                    #     print('Error: row {}, symbol {}'.format(err[0], err[1]))
+                    #     sys.exit(1)
                     self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
                     k += 1
                 else:
@@ -954,5 +950,4 @@ if __name__ == '__main__':
 #   15) LESS MORE CHAR implementation
 #   16) FUCK i forget about EXPRESSIONS into FUNC PARAMS
 #   17) i do sms with char --> it works fine but int d = 999; char a = d --> should works on other way. the same thing with cahr a = foo();
-#   18) ectually we have many troubles into code_gen_expression
 
