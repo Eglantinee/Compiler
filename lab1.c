@@ -1,9 +1,9 @@
-int foo(int z){
-    return z;
-}
+int foo(char id){
+id = 22;
+return id;}
 int main(){
-char a = 11;
-int d = 999;
+int a = 22;
+2 * 3 / 4;
 a = foo(a);
-return d;
+return !!a * 15;
 }
