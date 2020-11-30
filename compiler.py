@@ -27,8 +27,8 @@ class Lexer:
         self.st = self.file.read(1)
 
     def next_token(self):
-        self.value = None
-        self.symbol = self.symbol
+        # self.value = None
+        # self.symbol = self.symbol
         while True:
             if len(self.st) == 0:
                 self.tokens.append(self.Token(True, Lexer.EOF, self.row, self.symbol))
@@ -121,7 +121,7 @@ class Parser:
     def __init__(self, tokens: list):
         self.tokens = tokens
         self.token = None
-        self.blocks = []
+        # self.blocks = []
 
     def next_token(self):
         if self.tokens:
@@ -135,11 +135,11 @@ class Parser:
 
     VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, \
     BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, PROG = range(23)
-    names = set()
-    arrs = []
-    terms = []
-    stmts = {}
-    var_map = set()
+    # names = set()
+    # arrs = []
+    # terms = []
+    # stmts = {}
+    # var_map = set()
 
     @staticmethod
     def error(msg):
@@ -149,8 +149,10 @@ class Parser:
     def function_call(self):
         if self.token.type == Lexer.ID:
             name = self.token.value
+            err = [self.token.row, self.token.symbol]
             if self.tokens[0].type == Lexer.LPAR:
                 n = Node(Parser.CALL)
+                n.err = err
                 params = []
                 self.next_token()
                 self.next_token()
@@ -468,7 +470,8 @@ class Parser:
             self.next_token()
             if self.token.type == Lexer.ID:
                 name = self.token.value
-                self.names.add(name)
+                err = [self.token.row, self.token.symbol]
+                # self.names.add(name)
                 self.next_token()
                 if self.token.type == Lexer.LPAR:
                     self.next_token()
@@ -503,7 +506,7 @@ class Parser:
                     if self.token.type == Lexer.LBRA:
                         self.next_token()
                         blocks = []  # We can have many blocks in our function
-                        n = Node(Parser.FUNC, value=name)
+                        n = Node(Parser.FUNC, value=name, err=err)
                         while True:
                             elem = self.block_item()
                             blocks.append(elem)
@@ -531,13 +534,14 @@ class Parser:
                 break
             elem = self.function()
             if elem:
+                print(elem)
                 functions.append(elem)
             else:
                 sys.exit("428")
             self.next_token()
-        if self.token.type != Lexer.EOF:
-            msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-            self.error(msg)
+        # if self.token.type != Lexer.EOF:
+        #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
+        #     self.error(msg)
         node.op1 = functions
         return node
 
@@ -548,7 +552,7 @@ class Compile:
         self.if_counter = 0
         self.nested = [False, 0]
         self.program = []
-        self.name = None
+        # self.name = None
         self.var_map = {}
         self.func_map = {}
         self.announcement = {}
@@ -556,6 +560,7 @@ class Compile:
         self.counter = 0
         self.ttype = None
         self.current_var = None  # we need it just to make correct errors! and it is all!
+        self.functions = []
 
     HEAD = ['.386\n'
             '.model flat,stdcall\n'
@@ -670,10 +675,12 @@ class Compile:
                 return str('[ebp - {}]'.format(index) if index > 0 else '[ebp + {}]'.format(-index))
 
         if node.kind == Parser.PROG:
-            if isinstance(node.op1, Iterable):
-                self.iter_compile(node.op1)
-            else:
-                self.compile(node.op1)
+            if node.op1:
+                for i in node.op1:
+                    if i.kind == Parser.FUNC:
+                        self.functions.append(i.value)
+            for i in node.op1:
+                self.compile(i)
 
         elif node.kind == Parser.FUNC:
             func_name = node.value
@@ -681,7 +688,10 @@ class Compile:
             if func_name not in self.func_map.keys():
                 if func_name in self.announcement.keys():
                     if len(node.args) != len(self.announcement[func_name]):
-                        sys.exit("args don't equals")
+                        print("Error: row {0}, symbol {1}\n"
+                              "amount of args in announcement of {2}() don't equal "
+                              "with args in definition of {2}()".format(node.err[0], node.err[1], func_name))
+                        sys.exit(1)
                     elif node.args:
                         for i in range(len(node.args)):
                             if node.args[i][1] != self.announcement[func_name][i][1]:
@@ -720,7 +730,10 @@ class Compile:
                                      '\tpop ebp\n'
                                      '\tret\n')
             else:
-                sys.exit("608")
+                print('Error: row {}, symbol {}\n'
+                      'function with name {} already exist'.format(node.err[0], node.err[1], func_name))
+                sys.exit(1)
+                # sys.exit("608")
 
         elif node.kind == Parser.ANNOUNCEMENT:
             if node.value not in self.announcement.keys():
@@ -730,12 +743,21 @@ class Compile:
 
         elif node.kind == Parser.CALL:
             func_name = node.value
+            if func_name not in self.functions:
+                print('Error: row {}, symbol {}\n'
+                      'function {} doesn\'t define'.format(node.err[0], node.err[1], func_name))
+                sys.exit(1)
             if func_name not in self.func_map.keys():
                 if func_name not in self.announcement.keys():
                     sys.exit("call unknown function")
                 else:
                     if len(node.args) != len(self.announcement[func_name]):
-                        sys.exit("args don't equals")
+                        print("Error: row {0}, symbol {1}\n"
+                              "amount of args in announcement of {2}() don't equal "
+                              "with amount of args in call of {2}()".format(node.err[0],
+                                                                            node.err[1] + len(func_name) + 1,
+                                                                            func_name))
+                        sys.exit(1)
                     elif node.args:
                         for i in range(len(node.args)):
                             if node.args[i][1] != self.announcement[func_name][i][1]:
@@ -743,7 +765,11 @@ class Compile:
                                 sys.exit("bad types in announcement ")
             else:
                 if len(node.args) != len(self.func_map[func_name]):
-                    sys.exit("args don't equals")
+                    print("Error: row {0}, symbol {1}\n"
+                          "amount of args in definition of {2}() don't equal "
+                          "with amount of args in call of {2}()".format(node.err[0], node.err[1] + len(func_name) + 1,
+                                                                        func_name))
+                    sys.exit(1)
                 elif node.args:
                     for i in range(len(node.args)):
                         if node.args[i].kind == Parser.CONST:
