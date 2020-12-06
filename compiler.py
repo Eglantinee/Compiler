@@ -1,10 +1,6 @@
 import sys
-import inspect
 from collections import namedtuple
-from collections.abc import Iterable
 
-
-#   DECLARATION -- CALLER SHOULD GEN TEXT TOKEN!!!!
 class Lexer:
     def __init__(self, file):
         self.file = open(file, 'rb')
@@ -17,9 +13,9 @@ class Lexer:
                                 defaults=(self.value,))
 
     NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON, \
-    COMMA, QUOTE, CHAR, LESS, MORE, SYMBOL = range(24)
+    COMMA, QUOTE, CHAR, LESS, MORE, AND, SYMBOL = range(25)
     SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
-               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA, "'": QUOTE, '>': MORE, '<': LESS}
+               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA, "'": QUOTE, '>': MORE, '<': LESS, '&': AND}
     WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT, 'char': CHAR}
 
     def get(self):
@@ -27,8 +23,6 @@ class Lexer:
         self.st = self.file.read(1)
 
     def next_token(self):
-        # self.value = None
-        # self.symbol = self.symbol
         while True:
             if len(self.st) == 0:
                 self.tokens.append(self.Token(True, Lexer.EOF, self.row, self.symbol))
@@ -121,7 +115,6 @@ class Parser:
     def __init__(self, tokens: list):
         self.tokens = tokens
         self.token = None
-        # self.blocks = []
 
     def next_token(self):
         if self.tokens:
@@ -134,12 +127,7 @@ class Parser:
             self.error(msg)
 
     VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, \
-    BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, PROG = range(23)
-    # names = set()
-    # arrs = []
-    # terms = []
-    # stmts = {}
-    # var_map = set()
+    BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, ELESS, EMORE, AND, EQUAL, PROG = range(27)
 
     @staticmethod
     def error(msg):
@@ -182,11 +170,7 @@ class Parser:
         if call is not None:
             return call
         elif self.token.type == Lexer.LPAR:
-            # TODO: DO I REALLY NEED TO CREATE SEPARATE NODE EXPR? Now i just mute it for a check -- seems to be good\
-            #  decision
-            # n = Node(Parser.EXPR)
             self.next_token()
-            # n.op1 = self.expr()
             n = self.expr()
             self.next_token()
             if self.token.type != Lexer.RPAR:
@@ -233,13 +217,16 @@ class Parser:
             if self.token.type in Lexer.SYMBOLS.values():
                 for k, v in Lexer.SYMBOLS.items():
                     if v == self.token.type:
-                        n = Node(Parser.CONST, value=ord(k), ttype='int') # todo maybe we should get code and cmp with 255
+                        n = Node(Parser.CONST, value=ord(k), ttype='int')
                         break
             elif self.token.type == Lexer.SYMBOL:
                 n = Node(Parser.CONST, value=ord(self.token.value), ttype='int')
             if self.token.type == Lexer.NUM:
                 if len(self.token.value[0]) == 1:
                     n = Node(Parser.CONST, value=ord(self.token.value[0].decode()), ttype='int')
+            if self.token.type == Lexer.ID:
+                if len(self.token.value[0]) == 1:
+                    n = Node(Parser.CONST, value=ord(self.token.value[0]), ttype='int')
             if n is None:
                 sys.exit("char expected")
             self.next_token()
@@ -296,9 +283,17 @@ class Parser:
             op = self.token.type
             daughter = None
             if self.token.type == Lexer.LESS:
-                daughter = Node(Parser.LESS, op1=[])
+                if self.tokens[0].type == Lexer.EQUAL:
+                    self.next_token()
+                    daughter = Node(Parser.ELESS, op1=[], err=(self.token.row, self.token.symbol))
+                else:
+                    daughter = Node(Parser.LESS, op1=[], err=(self.token.row, self.token.symbol))
             elif self.token.type == Lexer.MORE:
-                daughter = Node(Parser.MORE, op1=[], err=(self.token.row, self.token.symbol))
+                if self.tokens[0].type == Lexer.EQUAL:
+                    self.next_token()
+                    daughter = Node(Parser.EMORE, op1=[], err=(self.token.row, self.token.symbol))
+                else:
+                    daughter = Node(Parser.MORE, op1=[], err=(self.token.row, self.token.symbol))
             daughter.op1.append(elem)
             self.next_token()
             daughter.op1.append(self.term())
@@ -309,34 +304,54 @@ class Parser:
                     daughter.op1.append(self.term())
                     continue
                 elif self.tokens[0].type == Lexer.LESS:
-                    op = Lexer.LESS
-                    daughter = Node(Parser.LESS, op1=[daughter])
-                    self.next_token()
-                    self.next_token()
-                    daughter.op1.append(self.term())
-                    continue
+                    if self.tokens[1].type == Lexer.EQUAL:
+                        op = Lexer.LESS
+                        daughter = Node(Parser.ELESS, op1=[daughter])
+                        self.next_token()
+                        self.next_token()
+                        self.next_token()
+                        daughter.op1.append(self.term())
+                        continue
+                    else:
+                        op = Lexer.LESS
+                        daughter = Node(Parser.LESS, op1=[daughter])
+                        self.next_token()
+                        self.next_token()
+                        daughter.op1.append(self.term())
+                        continue
                 elif self.tokens[0].type == Lexer.MORE:
-                    op = Lexer.MORE
-                    daughter = Node(Parser.MORE, op1=[daughter])
-                    self.next_token()
-                    daughter.err = (self.token.row, self.token.symbol)
-                    self.next_token()
-                    daughter.op1.append(self.term())
-                    continue
+                    if self.tokens[1].type == Lexer.EQUAL:
+                        op = Lexer.MORE
+                        daughter = Node(Parser.EMORE, op1=[daughter])
+                        self.next_token()
+                        daughter.err = (self.token.row, self.token.symbol)
+                        self.next_token()
+                        daughter.op1.append(self.term())
+                        continue
+                    else:
+                        op = Lexer.MORE
+                        daughter = Node(Parser.MORE, op1=[daughter])
+                        self.next_token()
+                        daughter.err = (self.token.row, self.token.symbol)
+                        self.next_token()
+                        daughter.op1.append(self.term())
+                        continue
                 else:
                     break
             return daughter
         return elem
 
-    def xor(self):
+    def equals(self):
         elem = self.not_equals()
-        if self.tokens[0].type == Lexer.XOR:
+        if self.tokens[0].type == Lexer.EQUAL and self.tokens[1].type == Lexer.EQUAL:
             self.next_token()
-            n = Node(Parser.BIN_XOR, op1=[elem])
+            self.next_token()
+            n = Node(Parser.EQUAL, op1=[elem])
             self.next_token()
             n.op1.append(self.not_equals())
             while True:
-                if self.tokens[0].type == Lexer.XOR:
+                if self.tokens[0].type == Lexer.EQUAL and self.tokens[1].type == Lexer.EQUAL:
+                    self.next_token()
                     self.next_token()
                     self.next_token()
                     n.op1.append(self.not_equals())
@@ -345,8 +360,44 @@ class Parser:
             return n
         return elem
 
+    def xor(self):
+        elem = self.equals()
+        if self.tokens[0].type == Lexer.XOR:
+            self.next_token()
+            n = Node(Parser.BIN_XOR, op1=[elem])
+            self.next_token()
+            n.op1.append(self.equals())
+            while True:
+                if self.tokens[0].type == Lexer.XOR:
+                    self.next_token()
+                    self.next_token()
+                    n.op1.append(self.equals())
+                else:
+                    break
+            return n
+        return elem
+
+    def log_and(self):
+        elem = self.xor()
+        if self.tokens[0].type == Lexer.AND and self.tokens[1].type == Lexer.AND:
+            self.next_token()
+            self.next_token()
+            self.next_token()
+            n = Node(Parser.AND, op1=[elem])
+            n.op1.append(self.xor())
+            while True:
+                if self.tokens[0].type == Lexer.AND and self.tokens[1].type == Lexer.AND:
+                    self.next_token()
+                    self.next_token()
+                    self.next_token()
+                    n.op1.append(self.xor())
+                else:
+                    break
+            return n
+        return elem
+
     def cond_expr(self):
-        e1 = self.xor()
+        e1 = self.log_and()
         if self.tokens[0].type == Lexer.QUESTION:
             self.next_token()
             self.next_token()
@@ -357,27 +408,17 @@ class Parser:
                 msg += "\ncolumn (:) expected"
                 self.error(msg)
             self.next_token()
-            # sys.exit(self.token)
             e3 = self.cond_expr()
-            # if self.tokens[0].type != Lexer.SEMICOLON:
-            #     self.next_token()
-            # self.next_token()
-            # if self.token.type != Lexer.SEMICOLON:
-            #     return self.error("COND_EXPR")
-            # print("Create Ternary ", e1.kind, e2.kind, e3.kind)
             return Node(Parser.TERNARY, op1=e1, op2=e2, op3=e3)
         else:
             return e1
 
     def expr(self):
         if self.token.type == Lexer.ID:
-            # var = self.token.value
-            # var = self.cond_expr()  # should return id node
-            # todo it is really broken -- if we run self.cond_epr it wont work but I would like it to be done
             var = Node(Parser.ID, value=self.token.value)
             var_tok = self.token
             err = (self.token.row, self.token.symbol)
-            if self.tokens[0].type == Lexer.EQUAL:
+            if self.tokens[0].type == Lexer.EQUAL and self.tokens[1].type != Lexer.EQUAL:
                 self.next_token()
                 self.next_token()
                 return Node(Parser.EXPR, op2=self.expr(), op1=var, err=err)
@@ -399,7 +440,6 @@ class Parser:
             ttype = self.token.type
             self.next_token()
             if self.token.type == Lexer.ID:
-                # tok_id = self.factor()  # It should return Node with var name ---------- IT IS BROKEN
                 tok_id = Node(Parser.ID, value=self.token.value)
                 self.next_token()
                 if self.token.type == Lexer.EQUAL:
@@ -428,7 +468,6 @@ class Parser:
             n.op1 = self.expr()
             self.next_token()
             if self.token.type != Lexer.SEMICOLON:
-                print(self.token, self.tokens[0])
                 msg = "Raise error in 263 line\n"
                 msg += "row: " + str(self.token.row - 1)
                 self.error(msg + " semicolon expected")
@@ -459,7 +498,6 @@ class Parser:
                 return n
 
     def block_item(self):
-        # todo it is simple fix but it is not the best variant cuz in declaration is the same code
         if self.token.type in (Lexer.FLOAT, Lexer.INT, Lexer.CHAR):
             return self.declaration()
         else:
@@ -471,12 +509,10 @@ class Parser:
             if self.token.type == Lexer.ID:
                 name = self.token.value
                 err = [self.token.row, self.token.symbol]
-                # self.names.add(name)
                 self.next_token()
                 if self.token.type == Lexer.LPAR:
                     self.next_token()
                     args = []
-                    # todo it this eta i don't understand which format i should use to store info about arguments
                     while True:
                         if self.token.type in (Lexer.FLOAT, Lexer.INT, Lexer.CHAR):
                             ttype = self.token.type
@@ -486,12 +522,12 @@ class Parser:
                                 self.next_token()
                                 if self.token.type == Lexer.COMMA:
                                     if self.tokens[0].type not in (Lexer.FLOAT, Lexer.INT, Lexer.CHAR):
-                                        sys.exit('368')
+                                        sys.exit("Error row:{} symbol: {}".format(self.token.row, self.token.symbol))
                                     else:
                                         self.next_token()
                                         continue
                                 elif self.token.type != Lexer.RPAR:
-                                    sys.exit('373')
+                                    sys.exit("Error row:{} symbol: {}".format(self.token.row, self.token.symbol))
                                 else:
                                     continue
                             else:
@@ -500,12 +536,11 @@ class Parser:
                             self.next_token()
                             break
                         else:
-                            sys.exit('376')
-                    # if self.token.type == Lexer.RPAR:
-                    #     self.next_token()
+                            sys.exit("Error row:{} symbol: {}".format(self.token.row, self.token.symbol))
+
                     if self.token.type == Lexer.LBRA:
                         self.next_token()
-                        blocks = []  # We can have many blocks in our function
+                        blocks = []
                         n = Node(Parser.FUNC, value=name, err=err)
                         while True:
                             elem = self.block_item()
@@ -514,7 +549,7 @@ class Parser:
                             if self.token.type == Lexer.RBRA:
                                 n.op1 = blocks
                                 n.value = name
-                                n.args = args  # it is temporary fix
+                                n.args = args
                                 break
                             else:
                                 continue
@@ -528,20 +563,16 @@ class Parser:
     def parse(self):
         node = Node(Parser.PROG)
         functions = []
-        self.next_token()  # get first token
+        self.next_token()
         while True:
             if self.token.type == Lexer.EOF:
                 break
             elem = self.function()
             if elem:
-                print(elem)
                 functions.append(elem)
             else:
-                sys.exit("428")
+                sys.exit("Error row:{} symbol: {}".format(self.token.row, self.token.symbol))
             self.next_token()
-        # if self.token.type != Lexer.EOF:
-        #     msg = "row: " + str(self.token.row) + " symbol: " + str(self.token.symbol)
-        #     self.error(msg)
         node.op1 = functions
         return node
 
@@ -552,7 +583,6 @@ class Compile:
         self.if_counter = 0
         self.nested = [False, 0]
         self.program = []
-        # self.name = None
         self.var_map = {}
         self.func_map = {}
         self.announcement = {}
@@ -561,21 +591,22 @@ class Compile:
         self.ttype = None
         self.current_var = None  # we need it just to make correct errors! and it is all!
         self.functions = []
+        self.compare = 0
 
     HEAD = ['.386\n'
             '.model flat,stdcall\n'
             'option casemap: none\n'
-            'include D:\\masm32\\include\\windows.inc\n'
-            'include D:\\masm32\\include\\kernel32.inc\n'
-            'include D:\\masm32\\include\\masm32.inc\n'
-            'includelib D:\\masm32\\lib\\kernel32.lib\n'
-            'includelib D:\\masm32\\lib\\masm32.lib\n'
+            'include \\masm32\\include\\windows.inc\n'
+            'include \\masm32\\include\\kernel32.inc\n'
+            'include \\masm32\\include\\masm32.inc\n'
+            'includelib \\masm32\\lib\\kernel32.lib\n'
+            'includelib \\masm32\\lib\\masm32.lib\n'
             'NumbToStr PROTO: DWORD,:DWORD\n']
 
     DATA = ['\n.data\n'
             'buff db 11 dup(?)\n']
 
-    CODE = ['\n.code\n']  # , 'main:\n', "\txor eax, eax\n\txor ebx, ebx\n\txor ecx, ecx\n\tpush ebp\n\tmov ebp, esp\n"]
+    CODE = ['\n.code\n']
 
     CALLS = ['\tinvoke  NumbToStr, ebx, ADDR buff\n',
              '\tinvoke  StdOut,eax\n',
@@ -639,41 +670,6 @@ class Compile:
                 index = self.var_map[elem.value][0]
             return -index
 
-        def define(elem):
-            # This function should be called just for CONST and ID
-            # todo we have NO type checking!!!
-            if elem.kind == Parser.CONST:
-                if self.ttype not in (Lexer.FLOAT, None) and elem.ttype == Lexer.FLOAT:
-                    print("cant assign int var {} to float".format(self.current_var))
-                    print('Error: row {}, symbol {}'.format(self.var_map[self.current_var][2][0],
-                                                            self.var_map[self.current_var][2][1]))
-                    sys.exit(1)
-                return str(elem.value)
-            else:
-                var_type = None
-                index = 0
-                if elem.value not in self.var_map.keys():
-                    if self.scope:
-                        for i in self.scope[::-1]:
-                            if elem.value in i.keys():
-                                var_type = i[elem.value][1]
-                                index = i[elem.value][0]
-                                break
-                                # return str('[ebp - {}]'.format(i[elem.value][0]))
-                    if var_type is None:
-                        print('Use var {} before assignment'.format(elem.value))
-                        print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
-                        sys.exit(1)
-                else:
-                    var_type = self.var_map[elem.value][1]
-                    index = self.var_map[elem.value][0]
-                    # todo define if None is really neccessary
-                if self.ttype not in (Lexer.FLOAT, None) and var_type == Lexer.FLOAT:
-                    print("cant assign int var {} to float".format(self.current_var))
-                    print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
-                    sys.exit(1)
-                return str('[ebp - {}]'.format(index) if index > 0 else '[ebp + {}]'.format(-index))
-
         if node.kind == Parser.PROG:
             if node.op1:
                 for i in node.op1:
@@ -697,7 +693,6 @@ class Compile:
                             if node.args[i][1] != self.announcement[func_name][i][1]:
                                 sys.exit("bad types in announcement ")
                 self.func_map.update({node.value: node.args})
-                ########################################
                 if func_name == 'main':
                     self.counter = 0
                     if node.args:
@@ -709,7 +704,6 @@ class Compile:
                                      '\txor ebx, ebx\n'
                                      '\txor ecx, ecx\n')
                     self.iter_compile(node.op1)
-                    # self.CODE.append('\tpop ebx\n')
                     self.CODE.append('\tmov ebx, eax\n')
                     self.CODE.append('\tmov esp, ebp\n'
                                      '\tpop ebp\n')
@@ -733,13 +727,13 @@ class Compile:
                 print('Error: row {}, symbol {}\n'
                       'function with name {} already exist'.format(node.err[0], node.err[1], func_name))
                 sys.exit(1)
-                # sys.exit("608")
 
         elif node.kind == Parser.ANNOUNCEMENT:
             if node.value not in self.announcement.keys():
                 self.announcement.update({node.value: node.args})
             else:
-                sys.exit("614")
+                sys.exit("Error: row: {}, symbol {}\n"
+                         "function with {} name was announced".format(node.err[0], node.err[1], node.value))
 
         elif node.kind == Parser.CALL:
             func_name = node.value
@@ -761,7 +755,6 @@ class Compile:
                     elif node.args:
                         for i in range(len(node.args)):
                             if node.args[i][1] != self.announcement[func_name][i][1]:
-                                # print(node.args[i][1])
                                 sys.exit("bad types in announcement ")
             else:
                 if len(node.args) != len(self.func_map[func_name]):
@@ -776,19 +769,11 @@ class Compile:
                             t_type = node.args[i].ttype
                         elif node.args[i].kind == Parser.ID:
                             t_type = get_type(node.args[i].value)
-                        # else:
-                        #     self.compile(node.args[i])
-            ####################################
             num = len(node.args) * 4
             if node.args:
                 for i in node.args[::-1]:
-                    # if i.kind in (Parser.ID, Parser.CONST):
-                    #     self.CODE.append("\tpush {}\n".format(define(i)))
-                    # else:
                         self.compile(i)
                         self.CODE.append('\tpush eax\n')
-            # if node.value == "main"    -------------------- just to think
-
             self.CODE.append('\tcall my_{}\n'.format(node.value))
             self.CODE.append('\tadd esp, {}\n'.format(num))
 
@@ -797,27 +782,12 @@ class Compile:
                 self.compile(node.op1)
             else:
                 self.current_var = node.op1.value
-                # self.ttype = get_type(node.op1.value)
-                # todo "define" is really good but sometimes it is not best decision to use
-                # if node.op2.kind == Parser.ID:
-                    # self.CODE.append("\tmov eax, {}\n".format(define(node.op2)))
-                # elif node.op2.kind == Parser.CALL:
-                #     self.compile(node.op2)
-                # else:
                 self.compile(node.op2)
-                # self.CODE.append('\tpush eax\n')
-                # self.compile(node.op1)
-                    # self.CODE.append('\tpop eax\n')
                 self.CODE.append('\tmov dword ptr [ebp {:+}], eax\n'.format(get_index(node.op1)))
-                # self.CODE.append('\tpush eax\n')
-                # self.current_var = None
 
         elif node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
             self.counter += 4
-            # node ttype is a TYPE of declaration but it should store in var_map -> Node.ID should have it
-            # node.op1.ttype = node.ttype
-            # print(node.ttype)
 
             if node.op1.value not in self.var_map.keys():
                 self.var_map.update({node.op1.value: (self.counter, node.ttype, node.err)})
@@ -827,18 +797,10 @@ class Compile:
                 sys.exit(1)
 
             self.current_var = node.op1.value
-            # self.compile(node.op1)  # Add var into var_map
             if node.op2:
-                # self.ttype = node.ttype
-                # if node.op2.kind == Parser.ID:
-                #     self.CODE.append('\tmov eax, {}\n'.format(define(node.op2)))
-                #     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
-                # else:
                     self.compile(node.op2)
                     self.current_var = None
-                    # self.CODE.append("\tpop eax\n")
                     self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
-                # self.ttype = None
             else:
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
 
@@ -855,9 +817,6 @@ class Compile:
             if self.nested[0] is False:
                 self.CODE.append("my_if{}:\n".format(counter))
                 self.nested[1] = self.if_counter
-            # if node.op1.kind in (Parser.CONST, Parser.ID):
-            #     self.CODE.append('\tmov eax, {}\n\tcmp eax, 0\n\tjle else{}\n'.format(define(node.op1), counter))
-            # else:
             self.compile(node.op1)
             self.CODE.append("\tcmp eax, 0\n"
                              "\tjle else{}\n".format(counter))
@@ -865,10 +824,6 @@ class Compile:
             if node.op2.kind == Parser.TERNARY:
                 self.nested[0] = True
                 self.nested[1] = self.if_counter
-            # if node.op2.kind in (Parser.CONST, Parser.ID):
-            #     self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(node.op2)))
-            #     self.CODE.append("\tjmp end_if{}\n".format(self.nested[1]))
-            # else:
             self.compile(node.op2)
             self.CODE.append("\tjmp end_if{}\n".format(self.nested[1]))
             self.CODE.append("else{}:\n".format(counter))
@@ -877,34 +832,19 @@ class Compile:
             if node.op3.kind == Parser.TERNARY:
                 self.nested[0] = True
                 self.nested[1] = self.if_counter
-            # if node.op3.kind in (Parser.CONST, Parser.ID):
-            #     # print(node.op3.kind)
-            #     self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(node.op3)))
-            # else:
             self.compile(node.op3)
             if self.nested[1] == counter:
                 self.nested[0] = False
-            # print(self.nested)
             if self.nested[0] is False:
                 self.CODE.append("end_if{}:\n".format(counter))
             counter -= 1
 
         elif node.kind == Parser.RET:
-            # if node.op1.kind not in (Parser.CONST, Parser.ID):
-                self.compile(node.op1)
-                # self.CODE.append('\tpop ebx\n')
-            # else:
-            #     self.CODE.append("\tmov eax, {}\n".format(define(node.op1)))
-            #     self.CODE.append('\tpush eax\n')
+             self.compile(node.op1)
 
         elif node.kind == Parser.BIN_PROD:
             k = 0
             for i in range(len(node.op1)):
-                # if i.kind in (Parser.CONST, Parser.ID):
-                #     self.CODE.append('\tmov eax, {}\n'
-                #                      '\tpush eax\n'.format(define(i)))
-                #     k += 1
-                # else:
                 self.compile(node.op1[i])
                 self.CODE.append('\tpush eax\n')
                 k += 1
@@ -920,11 +860,6 @@ class Compile:
             self.div_flag = True
             k = 0
             for i in range(len(node.op1)):
-                # if i.kind in (Parser.CONST, Parser.ID):
-                #     self.CODE.append('\tmov eax, {}\n'
-                #                      '\tpush eax\n'.format(define(i)))
-                #     k += 1
-                # else:
                 self.compile(node.op1[i])
                 self.CODE.append('\tpush eax\n')
                 k += 1
@@ -941,10 +876,6 @@ class Compile:
         elif node.kind == Parser.BIN_XOR:
             k = 0
             for i in range(len(node.op1)):
-                # if i.kind in (Parser.CONST, Parser.ID):
-                #     self.CODE.append('\tmov eax, {}\n\tpush eax\n'.format(define(i)))
-                #     k += 1
-                # else:
                 self.compile(node.op1[i])
                 self.CODE.append('\tpush eax\n')
                 k += 1
@@ -955,39 +886,103 @@ class Compile:
                     if i < len(node.op1) - 1:
                         self.CODE.append('\tpush eax\n')
 
+        elif node.kind == Parser.EQUAL:
+            k = 0
+            for i in range(len(node.op1)):
+                self.compile(node.op1[i])
+                self.CODE.append('\tpush eax\n')
+                k += 1
+                if k >= 2:
+                    self.CODE.append('\tpop ecx\n'
+                                     '\tpop eax\n'
+                                     '\tcmp ecx, eax\n'
+                                     '\tmov eax, 0\n'
+                                     '\tsete al\n')
+                    if i < len(node.op1) - 1:
+                        self.CODE.append('\tpush eax\n')
+        elif node.kind == Parser.ELESS:
+            k = 0
+            for i in range(len(node.op1)):
+                self.compile(node.op1[i])
+                self.CODE.append('\tpush eax\n')
+                k += 1
+                if k >= 2:
+                    self.CODE.append('\tpop ecx\n'
+                                     '\tpop eax\n'
+                                     '\tcmp eax, ecx\n'
+                                     '\tmov eax, 0\n'
+                                     '\tsetle al\n')
+                    if i < len(node.op1) - 1:
+                        self.CODE.append('\tpush eax\n')
+
+        elif node.kind == Parser.LESS:
+            k = 0
+            for i in range(len(node.op1)):
+                self.compile(node.op1[i])
+                self.CODE.append('\tpush eax\n')
+                k += 1
+                if k >= 2:
+                    self.CODE.append('\tpop ecx\n'
+                                     '\tpop eax\n'
+                                     '\tcmp eax, ecx\n'
+                                     '\tmov eax, 0\n'
+                                     '\tsetl al\n')
+                    if i < len(node.op1) - 1:
+                        self.CODE.append('\tpush eax\n')
+
+        elif node.kind == Parser.EMORE:
+            k = 0
+            for i in range(len(node.op1)):
+                self.compile(node.op1[i])
+                self.CODE.append('\tpush eax\n')
+                k += 1
+                if k >= 2:
+                    self.CODE.append('\tpop ecx\n'
+                                     '\tpop eax\n'
+                                     '\tcmp eax, ecx\n'
+                                     '\tmov eax, 0\n'
+                                     '\tsetge al\n')
+                    if i < len(node.op1) - 1:
+                        self.CODE.append('\tpush eax\n')
+        elif node.kind == Parser.EMORE:
+            k = 0
+            for i in range(len(node.op1)):
+                self.compile(node.op1[i])
+                self.CODE.append('\tpush eax\n')
+                k += 1
+                if k >= 2:
+                    self.CODE.append('\tpop ecx\n'
+                                     '\tpop eax\n'
+                                     '\tcmp eax, ecx\n'
+                                     '\tmov eax, 0\n'
+                                     '\tsetg al\n')
+                    if i < len(node.op1) - 1:
+                        self.CODE.append('\tpush eax\n')
+
+        elif node.kind == Parser.AND:
+            self.compare += 1
+            i = 0
+            while i < len(node.op1):
+                self.compile(node.op1[i])
+                self.CODE.append('\tcmp eax, 0\n'
+                                 '\tjne compare{0}\n'
+                                 '\tjmp cend{0}\n'.format(self.compare))
+                self.CODE.append('compare{}:\n'.format(self.compare))
+                self.compile(node.op1[i + 1])
+                self.CODE.append('\tcmp eax, 0\n'
+                                 '\tmov eax, 0\n'
+                                 '\tsetne al\n'
+                                 'cend{}:'.format(self.compare))
+                i += 2
+                self.compare += 1
+
         elif node.kind == Parser.UNOP:
-            # if node.op1.kind not in (Parser.CONST, Parser.ID):
                 self.compile(node.op1)
-                # self.CODE.append('\tpop eax\n')
                 self.CODE.append("\tcmp eax, 0\n"
                                  "\tsete al\n")
-            # else:
-            #     self.CODE.append('\tmov eax, {}\n'.format(define(node.op1)))
-            #     self.CODE.append("\tcmp eax, 0\n\tsete al\n")
-            # self.CODE.append('\tpush eax\n')
-
-        # elif node.kind == Parser.CONST:
-        #     if node.ttype == Lexer.FLOAT and self.ttype != Lexer.FLOAT:
-        #         print("cant assign int var {} to float".format(self.current_var))
-        #         print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-        #         sys.exit(1)
-        #     elif node.ttype == Lexer.INT and self.ttype == Lexer.CHAR:
-        #         if node.value > 255:
-        #             print('Warning: overflow conversion int to char')
-        #             node.value = node.value % 256
-        #     self.CODE.append('\tpush {}\n'.format(node.value))
 
         elif node.kind == Parser.CONST:
             self.CODE.append('\tmov eax, {}\n'.format(node.value))
-
-        # elif node.kind == Parser.ID:
-        #     # THIS SHOULD BE CALLED JUST FOR DECLARATION!!!
-        #     if node.value not in self.var_map.keys():
-        #         self.var_map.update({node.value: (self.counter, node.ttype, node.err)})
-        #     else:
-        #         print("repeatable assign of {}".format(node.value))
-        #         print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-        #         sys.exit(1)
 
         elif node.kind == Parser.ID:
             var_type = None
@@ -999,22 +994,13 @@ class Compile:
                             var_type = i[node.value][1]
                             index = i[node.value][0]
                             break
-                            # return str('[ebp - {}]'.format(i[elem.value][0]))
                 if var_type is None:
-                    # print(self.var_map)
                     print('Use var {} before assignment'.format(node.value))
                     print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
                     sys.exit(1)
             else:
-                # var_type = self.var_map[node.value][1]
                 index = self.var_map[node.value][0]
-                # todo define if None is really neccessary
-            # if self.ttype not in (Lexer.FLOAT, None) and var_type == Lexer.FLOAT:
-            #     print("cant assign int var {} to float".format(self.current_var))
-            #     print('Error: row {}, symbol {}'.format(elem.err[0], elem.err[1]))
-            #     sys.exit(1)
                 self.CODE.append('\tmov eax, [ebp {:+}]\n'.format(-index))
-            # return str('[ebp - {}]'.format(index) if index > 0 else '[ebp + {}]'.format(-index))
 
     def printer(self):
         f = open('output.asm', 'w')
@@ -1030,6 +1016,7 @@ class Compile:
         self.program += self.END
         for i in self.program:
             f.write(i)
+            print(i)
         f.close()
 
 
@@ -1042,17 +1029,3 @@ if __name__ == '__main__':
     com = Compile()
     com.compile(ast)
     com.printer()
-
-# TODO
-#   2) error messages are ugly through all code
-#   3) If there are more then one return statement
-#   5) should found better solution to parse TERNARY into CODE GEN
-#   6) !(a=0) and !(a) works ugly -- IT IS WORKING FINE but extra POP (or less push) --> cant reproduce today
-#   8) we should always "return" only int --> just think about it
-#   10) bad work of 'return' -> it should always move result in eax and after main is end we should move ebx, eax   --------------- MB DONE
-#   13) we actually don't need self CALLS because it can be add after main by them selves
-#   14)  int to char char = 999 % 256
-#   ------------------------------------------------------------------------------
-#   13) Error messages
-#   15) LESS MORE in code_gen
-
