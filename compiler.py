@@ -100,12 +100,13 @@ class Lexer:
 
 
 class Node:
-    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, op3=None, err=None, args=None):
+    def __init__(self, kind, value=None, ttype=None, op1=None, op2=None, op3=None, op4=None, err=None, args=None):
         self.kind = kind
         self.value = value
         self.op1 = op1
         self.op2 = op2
         self.op3 = op3
+        self.op4 = op4
         self.ttype = ttype
         self.err = err
         self.args = args
@@ -127,7 +128,7 @@ class Parser:
             self.error(msg)
 
     VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, \
-    BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, ELESS, EMORE, AND, EQUAL, PROG = range(27)
+    BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, ELESS, EMORE, AND, EQUAL, FOR, BREAK, CONTINUE, PROG = range(30)
 
     @staticmethod
     def error(msg):
@@ -413,6 +414,29 @@ class Parser:
         else:
             return e1
 
+    def expr_option_semicolon(self):
+        if self.token.type == Lexer.SEMICOLON:
+            return
+        else:
+            elem = self.expr()
+            self.next_token()
+            if self.token.type != Lexer.SEMICOLON:
+                sys.exit("semicolon expected")
+            else:
+                return elem
+
+    def expr_option_close_paren(self):
+        if self.token.type == Lexer.RPAR:
+            return
+        else:
+            elem = self.expr()
+            self.next_token()
+            if self.token.type != Lexer.RPAR:
+                sys.exit("rpar expected")
+            else:
+                return elem
+
+
     def expr(self):
         if self.token.type == Lexer.ID:
             var = Node(Parser.ID, value=self.token.value)
@@ -487,6 +511,38 @@ class Parser:
                 return n
             else:
                 return
+        elif self.token.type == Lexer.SEMICOLON:
+            return
+        elif self.token.type == Lexer.FOR:
+            self.next_token()
+            n = Node(Parser.FOR)
+            if self.token.type == Lexer.LPAR:
+                self.next_token()
+                if self.token.type in (Lexer.FLOAT, Lexer.INT):
+                    elem = self.declaration()
+                    self.next_token()
+                else:
+                    elem = self.expr_option_semicolon()
+                    self.next_token()
+                n.op1 = elem
+                n.op2 = self.expr_option_semicolon()
+                self.next_token()
+                n.op3 = self.expr_option_close_paren()
+                self.next_token()
+                n.op4 = self.statement()
+                return n
+            else:
+                sys.exit("520")
+        elif self.token.type == Lexer.BREAK:
+            self.next_token()
+            if self.token.type != Lexer.SEMICOLON:
+                sys.exit("539 semicolon")
+            return Node(Parser.BREAK)
+        elif self.token.type == Lexer.CONTINUE:
+            self.next_token()
+            if self.token.type != Lexer.SEMICOLON:
+                sys.exit("539 semicolon")
+            return Node(Parser.CONTINUE)
         else:
             n = self.expr()
             self.next_token()
