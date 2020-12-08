@@ -13,10 +13,10 @@ class Lexer:
                                 defaults=(self.value,))
 
     NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON, \
-    COMMA, QUOTE, CHAR, LESS, MORE, AND, SYMBOL = range(25)
+    COMMA, QUOTE, CHAR, LESS, MORE, AND, SYMBOL, FOR, BREAK, CONTINUE = range(28)
     SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
                "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA, "'": QUOTE, '>': MORE, '<': LESS, '&': AND}
-    WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT, 'char': CHAR}
+    WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT, 'char': CHAR, "for": FOR, "break": BREAK, "continue": CONTINUE}
 
     def get(self):
         self.symbol += 1
