@@ -3,7 +3,7 @@ from collections.abc import Iterable
 
 nodes = ["VAR", "CONST", "RET", "EXPR", "FUNC", "UNOP", "BINOP", "BIN_PROD", "BIN_DIV", "BIN_XOR", "FACTOR", "TERM",
          "DECL", "STMT", "ID", "TERNARY", "BLOCK", "ANNOUNCEMENT", "CALL", "EXOR", "LESS", "MORE", "ELESS", "EMORE",
-         "AND", "EQUAL", "FOR", "BREAK", "CONTINUE",  "PROG"]
+         "AND", "EQUAL", "FOR", "BREAK", "CONTINUE", "ADD", "PROG"]
 
 file = "lab1.c"
 lex = Lexer(file)

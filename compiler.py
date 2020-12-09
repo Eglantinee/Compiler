@@ -281,9 +281,28 @@ class Parser:
             return daughter
         return elem
 
+    def add(self):
+        elem = self.term()
+        if self.tokens[0].type == Lexer.PLUS:
+            self.next_token()
+            self.next_token()
+            n = Node(Parser.ADD, op1=[], err=(self.token.row, self.token.symbol))
+            n.op1.append(elem)
+            n.op1.append(self.term())
+            while True:
+                if self.tokens[0].type == Lexer.PLUS:
+                    self.next_token()
+                    self.next_token()
+                    n.op1.append(self.term())
+                    continue
+                else:
+                    break
+            return n
+        else:
+            return elem
 
     def not_equals(self):
-        elem = self.term()
+        elem = self.add()
         if self.tokens[0].type in (Lexer.LESS, Lexer.MORE):
             self.next_token()
             op = self.token.type
@@ -302,12 +321,12 @@ class Parser:
                     daughter = Node(Parser.MORE, op1=[], err=(self.token.row, self.token.symbol))
             daughter.op1.append(elem)
             self.next_token()
-            daughter.op1.append(self.term())
+            daughter.op1.append(self.add())
             while True:
                 if self.tokens[0].type == op:
                     self.next_token()
                     self.next_token()
-                    daughter.op1.append(self.term())
+                    daughter.op1.append(self.add())
                     continue
                 elif self.tokens[0].type == Lexer.LESS:
                     if self.tokens[1].type == Lexer.EQUAL:
@@ -316,14 +335,14 @@ class Parser:
                         self.next_token()
                         self.next_token()
                         self.next_token()
-                        daughter.op1.append(self.term())
+                        daughter.op1.append(self.add())
                         continue
                     else:
                         op = Lexer.LESS
                         daughter = Node(Parser.LESS, op1=[daughter])
                         self.next_token()
                         self.next_token()
-                        daughter.op1.append(self.term())
+                        daughter.op1.append(self.add())
                         continue
                 elif self.tokens[0].type == Lexer.MORE:
                     if self.tokens[1].type == Lexer.EQUAL:
@@ -332,7 +351,7 @@ class Parser:
                         self.next_token()
                         daughter.err = (self.token.row, self.token.symbol)
                         self.next_token()
-                        daughter.op1.append(self.term())
+                        daughter.op1.append(self.add())
                         continue
                     else:
                         op = Lexer.MORE
@@ -340,7 +359,7 @@ class Parser:
                         self.next_token()
                         daughter.err = (self.token.row, self.token.symbol)
                         self.next_token()
-                        daughter.op1.append(self.term())
+                        daughter.op1.append(self.add())
                         continue
                 else:
                     break
@@ -534,6 +553,13 @@ class Parser:
                 n.op3 = self.expr_option_close_paren()
                 self.next_token()
                 n.op4 = self.statement()
+                if n.op1 is None:
+                    n.op1 = Node(Parser.CONST, value=1)
+                if n.op2 is None:
+                    n.op2 = Node(Parser.CONST, value=1)
+                if n.op3 is None:
+                    n.op3 = Node(Parser.CONST, value=1)
+                print(n.op1)
                 return n
             else:
                 sys.exit("520")
