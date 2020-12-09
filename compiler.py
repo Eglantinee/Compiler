@@ -40,6 +40,7 @@ class Lexer:
                     self.get()
                     if self.st.decode() == '/':
                         self.file.readline()
+                        self.row += 1
                         self.get()
                     elif self.st.decode() == "*":
                         self.get()
@@ -51,6 +52,8 @@ class Lexer:
                                 if self.st.decode() == "/":
                                     self.get()
                                     break
+                            elif self.st == b'\n':
+                                self.row += 1
                             self.get()
                     else:
                         self.file.seek(pos)
@@ -277,7 +280,7 @@ class Parser:
                     break
             return daughter
         return elem
-               
+
 
     def not_equals(self):
         elem = self.term()
