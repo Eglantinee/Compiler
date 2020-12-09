@@ -667,6 +667,7 @@ class Compile:
     def __init__(self):
         self.div_flag = False
         self.if_counter = 0
+        self.for_counter = 0
         self.nested = [False, 0]
         self.program = []
         self.var_map = {}
@@ -682,11 +683,11 @@ class Compile:
     HEAD = ['.386\n'
             '.model flat,stdcall\n'
             'option casemap: none\n'
-            'include \\masm32\\include\\windows.inc\n'
-            'include \\masm32\\include\\kernel32.inc\n'
-            'include \\masm32\\include\\masm32.inc\n'
-            'includelib \\masm32\\lib\\kernel32.lib\n'
-            'includelib \\masm32\\lib\\masm32.lib\n'
+            'include D:\\masm32\\include\\windows.inc\n'
+            'include D:\\masm32\\include\\kernel32.inc\n'
+            'include D:\\masm32\\include\\masm32.inc\n'
+            'includelib D:\\masm32\\lib\\kernel32.lib\n'
+            'includelib D:\\masm32\\lib\\masm32.lib\n'
             'NumbToStr PROTO: DWORD,:DWORD\n']
 
     DATA = ['\n.data\n'
@@ -874,21 +875,26 @@ class Compile:
 
         elif node.kind == Parser.DECL:
             self.CODE.append("\tsub esp, 4\n")
-            self.counter += 4
-
-            if node.op1.value not in self.var_map.keys():
-                self.var_map.update({node.op1.value: (self.counter, node.ttype, node.err)})
-            else:
-                print("repeatable assign of {}".format(node.value))
-                print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
-                sys.exit(1)
-
             self.current_var = node.op1.value
             if node.op2:
                 self.compile(node.op2)
                 self.current_var = None
+                self.counter += 4
+                if node.op1.value not in self.var_map.keys():
+                    self.var_map.update({node.op1.value: (self.counter, node.ttype, node.err)})
+                else:
+                    print("repeatable assign of {}".format(node.value))
+                    print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
+                    sys.exit(1)
                 self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
             else:
+                self.counter += 4
+                if node.op1.value not in self.var_map.keys():
+                    self.var_map.update({node.op1.value: (self.counter, node.ttype, node.err)})
+                else:
+                    print("repeatable assign of {}".format(node.value))
+                    print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
+                    sys.exit(1)
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
 
         elif node.kind == Parser.BLOCK:
@@ -928,6 +934,49 @@ class Compile:
 
         elif node.kind == Parser.RET:
             self.compile(node.op1)
+
+        elif node.kind == Parser.FOR:
+            self.for_counter += 1
+            outer = self.var_map.copy()
+            self.scope.append(outer)
+            self.var_map = {}
+            self.compile(node.op1)
+            self.CODE.append("cond{}:\n".format(self.for_counter))
+            self.compile(node.op2)
+            self.CODE.append("\tcmp eax, 0\n"
+                             "\tje end_loop{}\n".format(self.for_counter))
+            outer = self.var_map.copy()
+            self.scope.append(outer)
+            self.var_map = {}
+            if node.op4 is None:
+                pass
+            else:
+                self.compile(node.op4)
+            self.compile(node.op3)
+            self.CODE.append("\tjmp cond{}\n".format(self.for_counter))
+            self.CODE.append("end_loop{}:\n".format(self.for_counter))
+
+            self.var_map = self.scope.pop()
+            self.var_map = self.scope.pop()
+
+        elif node.kind == Parser.BREAK:
+            self.CODE.append("\tjmp end_loop{}\n".format(self.for_counter))
+
+        elif node.kind == Parser.CONTINUE:
+            self.CODE.append("\tjmp cond{}\n".format(self.for_counter))
+
+        elif node.kind == Parser.ADD:
+            k = 0
+            for i in range(len(node.op1)):
+                self.compile(node.op1[i])
+                self.CODE.append('\tpush eax\n')
+                k += 1
+                if k >= 2:
+                    self.CODE.append('\tpop ecx\n'
+                                     '\tpop eax\n'
+                                     '\tadd eax, ecx\n')
+                    if i < len(node.op1) - 1:
+                        self.CODE.append('\tpush eax\n')
 
         elif node.kind == Parser.BIN_PROD:
             k = 0
@@ -1085,6 +1134,8 @@ class Compile:
                     print('Use var {} before assignment'.format(node.value))
                     print('Error: row {}, symbol {}'.format(node.err[0], node.err[1]))
                     sys.exit(1)
+                else:
+                    self.CODE.append('\tmov eax, [ebp {:+}]\n'.format(-index))
             else:
                 index = self.var_map[node.value][0]
                 self.CODE.append('\tmov eax, [ebp {:+}]\n'.format(-index))
