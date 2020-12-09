@@ -13,10 +13,11 @@ class Lexer:
                                 defaults=(self.value,))
 
     NUM, ID, INT, FLOAT, LBRA, RBRA, RETURN, LPAR, RPAR, SEMICOLON, NOT, PROD, EQUAL, XOR, DIV, EOF, QUESTION, COLON, \
-    COMMA, QUOTE, CHAR, LESS, MORE, AND, SYMBOL, FOR, BREAK, CONTINUE = range(28)
+    COMMA, QUOTE, CHAR, LESS, MORE, AND, SYMBOL, FOR, BREAK, CONTINUE, PLUS = range(29)
     SYMBOLS = {'{': LBRA, '}': RBRA, '(': LPAR, ')': RPAR, ';': SEMICOLON, '!': NOT, '*': PROD, '=': EQUAL, "^": XOR,
-               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA, "'": QUOTE, '>': MORE, '<': LESS, '&': AND}
-    WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT, 'char': CHAR, "for": FOR, "break": BREAK, "continue": CONTINUE}
+               "/": DIV, "?": QUESTION, ":": COLON, ",": COMMA, "'": QUOTE, '>': MORE, '<': LESS, '&': AND, '+': PLUS}
+    WORDS = {'int': INT, 'return': RETURN, 'float': FLOAT, 'char': CHAR, "for": FOR, "break": BREAK,
+             "continue": CONTINUE}
 
     def get(self):
         self.symbol += 1
@@ -128,7 +129,7 @@ class Parser:
             self.error(msg)
 
     VAR, CONST, RET, EXPR, FUNC, UNOP, BINOP, BIN_PROD, BIN_DIV, BIN_XOR, FACTOR, TERM, DECL, STMT, ID, TERNARY, \
-    BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, ELESS, EMORE, AND, EQUAL, FOR, BREAK, CONTINUE, PROG = range(30)
+    BLOCK, ANNOUNCEMENT, CALL, EXOR, LESS, MORE, ELESS, EMORE, AND, EQUAL, FOR, BREAK, CONTINUE, ADD, PROG = range(31)
 
     @staticmethod
     def error(msg):
@@ -276,6 +277,7 @@ class Parser:
                     break
             return daughter
         return elem
+               
 
     def not_equals(self):
         elem = self.term()
@@ -435,7 +437,6 @@ class Parser:
                 sys.exit("rpar expected")
             else:
                 return elem
-
 
     def expr(self):
         if self.token.type == Lexer.ID:
@@ -706,6 +707,7 @@ class Compile:
                 return self.var_map[id][1]
             else:
                 sys.exit("533")
+
         def get_index(elem):
             var_type = None
             index = 0
@@ -828,8 +830,8 @@ class Compile:
             num = len(node.args) * 4
             if node.args:
                 for i in node.args[::-1]:
-                        self.compile(i)
-                        self.CODE.append('\tpush eax\n')
+                    self.compile(i)
+                    self.CODE.append('\tpush eax\n')
             self.CODE.append('\tcall my_{}\n'.format(node.value))
             self.CODE.append('\tadd esp, {}\n'.format(num))
 
@@ -854,9 +856,9 @@ class Compile:
 
             self.current_var = node.op1.value
             if node.op2:
-                    self.compile(node.op2)
-                    self.current_var = None
-                    self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
+                self.compile(node.op2)
+                self.current_var = None
+                self.CODE.append("\tmov dword ptr [ebp - {}], eax\n".format(self.counter))
             else:
                 self.CODE.append("\tmov dword ptr [ebp - {}], 0\n".format(self.counter))
 
@@ -896,7 +898,7 @@ class Compile:
             counter -= 1
 
         elif node.kind == Parser.RET:
-             self.compile(node.op1)
+            self.compile(node.op1)
 
         elif node.kind == Parser.BIN_PROD:
             k = 0
@@ -1033,9 +1035,9 @@ class Compile:
                 self.compare += 1
 
         elif node.kind == Parser.UNOP:
-                self.compile(node.op1)
-                self.CODE.append("\tcmp eax, 0\n"
-                                 "\tsete al\n")
+            self.compile(node.op1)
+            self.CODE.append("\tcmp eax, 0\n"
+                             "\tsete al\n")
 
         elif node.kind == Parser.CONST:
             self.CODE.append('\tmov eax, {}\n'.format(node.value))
